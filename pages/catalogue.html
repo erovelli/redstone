@@ -79,8 +79,8 @@ footer nav{ font-size:.78rem; }
 
 .wrap{ max-width:1180px; }
 .top{ background:var(--bg); padding-top:10px; }
-.launch{ margin:14px 0 0; padding:10px 0 4px; border-bottom:1px solid var(--line); }
-.launch-scroll{ overflow-x:auto; overflow-y:hidden; padding-bottom:4px; }
+.launch{ display:block; margin:14px 0 0; padding:10px 0 4px; border-bottom:1px solid var(--line); }
+.launch-scroll{ overflow-x:auto; overflow-y:hidden; padding-bottom:32px; }
 .launch .stage{ margin:0 auto; }
 .pad{ position:absolute; z-index:3; display:flex; align-items:flex-end; justify-content:center; text-decoration:none; color:var(--muted); font-size:.74rem; }
 .pad span{ transform:translateY(100%); padding-top:4px; white-space:nowrap; }
@@ -97,6 +97,7 @@ footer nav{ font-size:.78rem; }
 #side{ position:sticky; top:64px; align-self:start; max-height:calc(100vh - 80px); overflow:auto; font-size:.82rem; padding-right:6px; }
 #side nav{ display:flex; flex-direction:column; gap:1px; margin-top:10px; }
 #side nav a{ color:var(--text); text-decoration:none; padding:3px 8px; border-left:2px solid transparent; display:flex; justify-content:space-between; align-items:center; gap:8px; }
+#side [hidden]{ display:none; }
 #side nav a:hover{ color:var(--accent); }
 #side nav a.active{ border-left-color:var(--accent); background:var(--surface); color:var(--heading); }
 #side .group{ margin:14px 0 2px; } #side .group a{ font-size:.72rem; color:var(--muted); text-transform:lowercase; padding-left:8px; }

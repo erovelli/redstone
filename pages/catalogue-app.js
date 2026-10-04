@@ -14,7 +14,7 @@ R.setScale(scaleFor(width()));
 let stored = null; try { stored = localStorage.getItem('rs-theme'); } catch(e){}
 const th = Logic.leverLamp(); th.io.lever.on = stored ? stored==='light' : !matchMedia('(prefers-color-scheme: dark)').matches; th.world.run(3);
 root.dataset.theme = th.io.lamp.lit ? 'light' : 'dark'; R.readPal();
-const tv = R.makeView($('#theme-stage'), th, { onTick: () => { const want = th.io.lamp.lit ? 'light' : 'dark'; if (root.dataset.theme !== want){ root.dataset.theme = want; try { localStorage.setItem('rs-theme', want); } catch(e){} R.readPal(); route(true); if (nav.view) nav.view.draw(performance.now()); } } });
+const tv = R.makeView($('#theme-stage'), th, { onTick: () => { const want = th.io.lamp.lit ? 'light' : 'dark'; if (root.dataset.theme !== want){ root.dataset.theme = want; try { localStorage.setItem('rs-theme', want); } catch(e){} R.readPal(); refreshPresentation(); } } });
 tv.persistent = true; R.hitAt(tv, 0,0,0, 'Light switch lever', () => { th.io.lever.on = !th.io.lever.on; });
 
 /* main nav: ender pearl launcher */
@@ -68,7 +68,8 @@ function buildSide(){
   $('#q').addEventListener('input', ev => { const q = ev.target.value.trim().toLowerCase(); side.querySelectorAll('a.item').forEach(a => a.hidden = q && !a.dataset.name.includes(q)); side.querySelectorAll('p.group').forEach(g => { let n = g.nextElementSibling, any = false; while (n && n.classList.contains('item')){ if (!n.hidden) any = true; n = n.nextElementSibling; } g.hidden = q && !any; }); });
 }
 const markDots = () => side.querySelectorAll('[data-dot]').forEach(i => { const r = results[i.dataset.dot]; i.className = r ? (r.every(x=>x.pass) ? 'ok' : 'bad') : ''; });
-$('#menu').addEventListener('click', () => { const open = document.body.classList.toggle('nav-open'); $('#menu').setAttribute('aria-expanded', open); });
+function setMenuOpen(open){ document.body.classList.toggle('nav-open', open); $('#menu').setAttribute('aria-expanded', open); }
+$('#menu').addEventListener('click', () => setMenuOpen(!document.body.classList.contains('nav-open')));
 
 /* helpers */
 const clearViews = () => { for (const v of [...R.views]) if (!v.persistent) R.removeView(v); };
@@ -83,7 +84,7 @@ const thumbScale = (box) => { const [x0,x1,y0,y1,z0,z1] = box, cols = x1-x0+1, r
 function thumb(el, e){ const built = e.build(C.defaults(e)); built.world.run(4); const keep = R.B; R.setScale(thumbScale(built.box)); const v = R.makeView(el, built, e.plaque ? { skip: b => b.plaque } : {}); v.draw(performance.now()); R.removeView(v); R.setScale(keep); }
 const card = e => `<a class="card" href="#/c/${e.id}"><div class="thumb" data-thumb="${e.id}"></div><p class="kicker">${e.category}</p><h3>${e.name}</h3><p>${e.summary.split('. ')[0].replace(/\.$/,'')}.</p><p class="io">${e.inputs[0]} → ${e.outputs[0]}</p></a>`;
 const fillThumbs = () => main.querySelectorAll('[data-thumb]').forEach(el => { const s = document.createElement('div'); s.className = 'stage'; el.appendChild(s); thumb(s, byId[el.dataset.thumb]); });
-const setActive = key => { side.querySelectorAll('nav a').forEach(a => a.classList.toggle('active', a.dataset.r === key)); document.body.classList.remove('nav-open'); };
+const setActive = key => { side.querySelectorAll('nav a').forEach(a => a.classList.toggle('active', a.dataset.r === key)); setMenuOpen(false); };
 
 /* pages */
 function pageHome(){
@@ -142,10 +143,19 @@ function pageTests(){
     <div class="toolbar"><button class="btn primary" id="runall" type="button">Run all tests</button><span id="sum" class="muted"></span></div>
     <div class="table-wrap"><table class="tests-table"><thead><tr><th>Component</th><th>Category</th><th>Tests</th><th>Result</th><th>Time</th></tr></thead><tbody>
     ${C.entries.map(e => `<tr data-id="${e.id}"><td><a href="#/c/${e.id}">${e.name}</a></td><td>${e.category}</td><td>${C.testsOf(e).length}</td><td class="res">${resText(e.id)}</td><td class="ms"></td></tr>`).join('')}</tbody></table></div>`;
-  $('#runall').addEventListener('click', async () => { let p=0, f=0, t0 = performance.now();
-    for (const e of C.entries){ const row = main.querySelector(`tr[data-id="${e.id}"]`); row.querySelector('.res').textContent = 'running'; await new Promise(r => setTimeout(r, 10));
-      const r = C.runTests(e); results[e.id] = r; r.forEach(x => x.pass ? p++ : f++); row.querySelector('.res').innerHTML = resText(e.id); row.querySelector('.ms').textContent = r.reduce((n,x)=>n+x.ms,0)+' ms'; markDots(); }
-    $('#sum').textContent = `${p} passed, ${f} failed in ${Math.round(performance.now()-t0)} ms`; });
+  const runall = $('#runall'), table = $('.tests-table'), sum = $('#sum');
+  runall.addEventListener('click', async () => { if (runall.disabled) return; runall.disabled = true;
+    let p=0, f=0, t0 = performance.now(); sum.textContent = '';
+    try {
+      for (const e of C.entries){
+        if (!table.isConnected) return;
+        const row = table.querySelector(`tr[data-id="${e.id}"]`); row.querySelector('.res').textContent = 'running'; await new Promise(r => setTimeout(r, 10));
+        if (!table.isConnected) return;
+        const r = C.runTests(e); results[e.id] = r; r.forEach(x => x.pass ? p++ : f++); row.querySelector('.res').innerHTML = resText(e.id); row.querySelector('.ms').textContent = r.reduce((n,x)=>n+x.ms,0)+' ms'; markDots();
+      }
+      sum.textContent = `${p} passed, ${f} failed in ${Math.round(performance.now()-t0)} ms`;
+    } finally { runall.disabled = false; }
+  });
 }
 const resText = id => { const r = results[id]; if (!r) return '<span class="muted">not run</span>'; const ok = r.filter(x=>x.pass).length; return `<span class="${ok===r.length?'ok':'bad'}">${ok}/${r.length} pass</span>`; };
 
@@ -188,58 +198,74 @@ function pageComponent(e){
     if (p.options){ const l = document.createElement('label'); l.className='param'; l.innerHTML = `${p.label} <select>${p.options.map(o=>`<option${o===p.def?' selected':''}>${o}</option>`).join('')}</select>`; $('select',l).addEventListener('change', ev => { params[p.key] = ev.target.value; mount(); }); pr.appendChild(l); }
     else pr.appendChild(slider(p.label, p.min, p.max, p.def, v => { params[p.key] = v; mount(); }));
   }
-  const mk = (text, fn, cls='') => { const b = document.createElement('button'); b.type='button'; b.className='btn small '+cls; b.textContent = text; b.addEventListener('click', fn); ctr.appendChild(b); return b; };
-  function mount(){
+  const refresh = () => { st.sync(); st.view.draw(performance.now()); };
+  const act = fn => () => { fn(); refresh(); };
+  const mk = (text, fn, cls='') => { const b = document.createElement('button'); b.type='button'; b.className='btn small '+cls; b.textContent = text; b.addEventListener('click', act(fn)); ctr.appendChild(b); return b; };
+  function drawView(){
+    const built = st.built, walker = st.view && st.view.walker;
     if (st.view) R.removeView(st.view);
-    stage.innerHTML = ''; ctr.innerHTML = ''; st.prev = {}; st.log = []; $('#log').innerHTML = '';
+    stage.innerHTML = '';
     R.setScale(scaleFor(width()));
-    const built = st.built = e.build(params); built.world.run(4);
-    const d = describe(built.world); $('#foot').textContent = d.foot; $('#parts').textContent = d.parts;
-    const opt = { onTick: () => sync() };
+    const opt = { onTick: () => { if (st.hold > 0 && --st.hold === 0 && built.io.plate) built.io.plate.on = false; st.sync(); } };
     if (e.depth){ const F = built.F, inWall = b => b.y <= F && b.y >= F-4 && b.t !== 'ground', cut = () => F - st.peel;
       opt.T = Math.max(2, Math.round(R.B * st.tilt/100)); opt.ghost = b => inWall(b) && b.y > cut(); opt.tint = b => inWall(b) && b.y < cut() ? Math.min(.6, (cut()-b.y)*.15) : 0; if (e.plaque) opt.skip = b => b.plaque; }
     const v = st.view = R.makeView(stage, built, opt);
+    if (walker) v.walker = walker;
     if (e.plaque) built.bands.forEach((z0,k) => { const r = v.front(0, built.F-3, z0+1); R.layer(stage, r.x, r.y, built.W*R.B, 2*R.B, 'layer plaque', `<div><b>Band ${k+1}</b> your text here</div>`); });
+    for (const h of st.hits) R.hitAt(v, h.b.x, h.b.y, h.b.z, h.label, h.fn);
+    v.draw(performance.now());
+  }
+  function mount(){
+    if (st.view) st.view.walker = null;
+    ctr.innerHTML = ''; st.prev = {}; st.log = []; st.walk = 12; st.hold = 0; st.acc = 0; st.hits = []; $('#log').innerHTML = '';
+    const built = st.built = e.build(params); built.world.run(4);
+    const d = describe(built.world); $('#foot').textContent = d.foot; $('#parts').textContent = d.parts;
+    const hit = (b, label, fn) => st.hits.push({ b, label, fn });
     const fns = [];
     for (const c of e.controls){
       const b = built.io && built.io[c.io]; if (!b && c.kind!=='action') continue;
-      if (c.kind==='lever'){ const btn = mk('', () => { b.on = !b.on; built.world.vibrate(b.x,b.y,b.z,'lever'); }); fns.push(() => { btn.textContent = `${c.label}: ${b.on?'on':'off'}`; btn.setAttribute('aria-pressed', b.on); }); R.hitAt(v, b.x, b.y, b.z, `${c.label} (click to flip)`, () => btn.click()); }
-      if (c.kind==='button'){ const fire = () => { if (b.on) return; b.on = true; built.world.vibrate(b.x,b.y,b.z,'button'); built.world.at(built.world.t+10, () => { b.on = false; }); }; mk(c.label, fire); R.hitAt(v, b.x, b.y, b.z, c.label, fire); }
-      if (c.kind==='plate'){ const fire = () => { b.on = true; st.hold = 30; }; mk(c.label, fire); R.hitAt(v, b.x, b.y, b.z, c.label, fire); }
+      if (c.kind==='lever'){ const btn = mk('', () => { b.on = !b.on; built.world.vibrate(b.x,b.y,b.z,'lever'); }); fns.push(() => { btn.textContent = `${c.label}: ${b.on?'on':'off'}`; btn.setAttribute('aria-pressed', b.on); }); hit(b, `${c.label} (click to flip)`, () => btn.click()); }
+      if (c.kind==='button'){ const fire = () => { if (b.on) return; b.on = true; built.world.vibrate(b.x,b.y,b.z,'button'); built.world.at(built.world.t+10, () => { b.on = false; }); }; const btn = mk(c.label, fire); hit(b, c.label, () => btn.click()); }
+      if (c.kind==='plate'){ const fire = () => { b.on = true; st.hold = 30; }; const btn = mk(c.label, fire); hit(b, c.label, () => btn.click()); }
       if (c.kind==='walk'){ const lab = document.createElement('span'); lab.className='muted small';
-        const step = dd => { st.walk = Math.max(1, Math.min(14, st.walk+dd)); built.world.vibrate(b.x+1, b.y+st.walk, 0, 'step'); v.walker = { x:b.x+1, y:b.y+st.walk, at:performance.now() }; };
+        const step = dd => { st.walk = Math.max(1, Math.min(14, st.walk+dd)); built.world.vibrate(b.x+1, b.y+st.walk, 0, 'step'); st.view.walker = { x:b.x+1, y:b.y+st.walk, at:performance.now() }; };
         mk('Step closer', () => step(-1)); mk('Step away', () => step(1)); ctr.appendChild(lab); fns.push(() => { lab.textContent = `visitor ${st.walk} blocks away`; }); }
       if (c.kind==='action') mk(c.label, () => c.fn(built));
-      if (c.kind==='repeaters') b.forEach((r,k) => R.hitAt(v, r.x, r.y, r.z, `Repeater ${k+1}: tap to change delay`, () => { r.delay = r.delay%4+1; }));
+      if (c.kind==='repeaters') b.forEach((r,k) => hit(r, `Repeater ${k+1}: tap to change delay`, act(() => { r.delay = r.delay%4+1; })));
     }
-    if (e.depth){ ctr.appendChild(slider('Tilt', 10, 72, st.tilt, x => { st.tilt = x; mount(); })); ctr.appendChild(slider('Peel', 0, 3, st.peel, x => { st.peel = x; v.draw(performance.now()); })); }
+    if (e.depth){ ctr.appendChild(slider('Tilt', 10, 72, st.tilt, x => { st.tilt = x; drawView(); })); ctr.appendChild(slider('Peel', 0, 3, st.peel, x => { st.peel = x; st.view.draw(performance.now()); })); }
     const ioKeys = Object.keys(built.io||{}).filter(k => built.io[k]);
     $('#mon').innerHTML = `<tbody>${ioKeys.map(k => `<tr><th>${k}</th><td data-k="${k}"></td></tr>`).join('')}${e.monitor ? Object.keys(e.monitor(built)).map(k => `<tr><th>${k}</th><td data-m="${k}"></td></tr>`).join('') : ''}</tbody>`;
     const sync = () => {
-      if (st.hold > 0 && --st.hold === 0 && built.io.plate) built.io.plate.on = false;
       fns.forEach(f => f()); $('#tick').textContent = `t = ${built.world.t}`;
       for (const k of ioKeys){ const s = ioState(built.world, built.io[k]); $(`[data-k="${k}"]`).textContent = s; if (st.prev[k] !== undefined && st.prev[k] !== s) logLine(`${k} → ${s}`); st.prev[k] = s; }
       if (e.monitor){ const m = e.monitor(built); for (const k in m){ $(`[data-m="${k}"]`).textContent = m[k]; if (st.prev['m:'+k] !== undefined && st.prev['m:'+k] !== m[k]) logLine(`${k} → ${m[k]}`); st.prev['m:'+k] = m[k]; } }
     };
     const logLine = txt => { const li = document.createElement('li'); li.innerHTML = `<span>t${built.world.t}</span> ${txt}`; const log = $('#log'); log.prepend(li); while (log.children.length > 60) log.lastChild.remove(); };
-    sync();
+    st.sync = sync; sync();
     $('#use').textContent = `const c = Catalogue.entries.find(e => e.id === '${e.id}').build(${JSON.stringify(params)});\n// inputs and outputs: c.io.${ioKeys.join(', c.io.')}\nsetInterval(() => c.world.tick(), 100);   // 1 redstone tick\nRSR.makeView(stageElement, c);              // draw it`;
-    v.draw(performance.now());
+    drawView();
   }
-  st.mount = mount; mount();
+  st.mount = mount; st.redraw = drawView; mount();
   const play = $('#play'), stepB = $('#step');
   const setPaused = p => { st.paused = p; play.textContent = p ? 'Play' : 'Pause'; play.setAttribute('aria-pressed', p); stepB.disabled = !p; };
   play.addEventListener('click', () => setPaused(!st.paused));
   stepB.addEventListener('click', () => tickView(st.view));
   $('#reset').addEventListener('click', () => mount());
   $('#speed').addEventListener('change', ev => { st.speed = +ev.target.value; });
-  $('#runtests').addEventListener('click', () => { $('#tests').querySelectorAll('.st').forEach(s => s.textContent = 'running'); setTimeout(() => { results[e.id] = C.runTests(e); showResults(e); markDots(); }, 20); });
+  const runtests = $('#runtests');
+  runtests.addEventListener('click', () => { runtests.disabled = true; $('#tests').querySelectorAll('.st').forEach(s => s.textContent = 'running'); setTimeout(() => { if (bench !== st) return; results[e.id] = C.runTests(e); showResults(e); markDots(); runtests.disabled = false; }, 20); });
   st.setPaused = setPaused;
 }
 function showResults(e){ const r = results[e.id]; $('#tests').innerHTML = r.map(x => `<li class="${x.pass?'ok':'bad'}"><span class="st">${x.pass?'pass':'FAIL'}</span> ${x.name} <span class="muted">${x.ms} ms</span>${x.err?` <code>${x.err}</code>`:''}</li>`).join(''); $('#badge').innerHTML = resText(e.id); }
 
 /* router */
 let lastHash = null, current = null;
+function refreshPresentation(){
+  if (bench) bench.redraw();
+  else if (main.querySelector('[data-thumb]')) route(true);
+  for (const v of R.views) v.draw(performance.now());
+}
 function navigate(h){ current = h; try { if (location.hash !== h) history.pushState(null, '', h); } catch(e){} route(); }
 function route(force){
   let h = current || location.hash || '#/'; if (!h.startsWith('#/')) h = lastHash || '#/';
@@ -272,5 +298,5 @@ setInterval(() => { const now = performance.now(), dt = now - last; last = now;
 const frame = now => { for (const v of R.views) if (v.anim) v.draw(now); requestAnimationFrame(frame); };
 requestAnimationFrame(frame);
 buildSide(); route(); buildNav();
-let lw = width(); addEventListener('resize', () => { clearTimeout(window.__rz); window.__rz = setTimeout(() => { if (Math.abs(width()-lw) > 60){ lw = width(); route(true); buildNav(); } }, 250); });
+let lw = innerWidth; addEventListener('resize', () => { clearTimeout(window.__rz); window.__rz = setTimeout(() => { if (innerWidth !== lw){ lw = innerWidth; refreshPresentation(); buildNav(); } }, 250); });
 })();
