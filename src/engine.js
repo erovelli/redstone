@@ -100,6 +100,7 @@ class World {
       else if ((b.t==='lever'||b.t==='plate'||b.t==='button') && b.on && b.att){ d = D[b.att]; lv = 15; }
       else if (b.t==='sculk' && b.on){ d = D.D; lv = b.out; }
       if (lv){ const n=this.get(b.x+d[0], b.y+d[1], b.z+d[2]); if (n && CONDUCT.has(n.t)) bump(strong, K(n.x,n.y,n.z), lv); }
+      if (b.t==='torch' && b.lit && b.att!=='U'){ const n=this.get(b.x, b.y, b.z+1); if (n && CONDUCT.has(n.t)) bump(strong, K(n.x,n.y,n.z), 15); }   // torches strongly power the block above
     }
     for (const L of this.floor){ const f=this.get(...L.feed); if (f && (strong.get(K(...L.feed))||0)>0) L.cells.forEach(c=>bump(strong, K(...c), 15)); }
     this.strong = strong;
@@ -218,7 +219,7 @@ class World {
         case 'lamp': { const p = this.lampPowered(b); if (p) b.lit = true; else if (b.lit && !b.offAt){ b.offAt = now+1; this.at(now+1, () => { b.offAt = 0; if (!this.lampPowered(b)) b.lit = false; }); } break; }
         case 'torch': { const ab=this.nb(b,b.att); const want = !(ab && this.into(b,ab)>0); if (want!==b.lit && b.pend!==want){ b.pend=want; this.at(now+1, () => { b.lit = b.pend; b.pend = undefined; }); } break; }
         case 'repeater': { const inp = this.into(b, this.nb(b,OPP[b.d]))>0; if (inp!==b.inp){ b.inp=inp; this.at(now+(b.delay||1), () => { b.on = inp; }); } break; }
-        case 'comparator': { const bk=OPP[b.d], n=this.nb(b,bk); const rear = n && n.t==='barrel' ? (n.fill||0) : this.into(b,n); let side=0; for (const s of HL){ if (s===b.d||s===bk) continue; const m=this.nb(b,s); if (m && (m.t==='dust'||m.t==='repeater'||m.t==='comparator')) side=Math.max(side, this.into(b,m)); } const o = rear>=side?rear:0; if (o!==b.tgt){ b.tgt=o; this.at(now+1, () => { b.out = o; }); } break; }
+        case 'comparator': { const bk=OPP[b.d], n=this.nb(b,bk); const rear = n && n.t==='barrel' ? (n.fill||0) : this.into(b,n); let side=0; for (const s of HL){ if (s===b.d||s===bk) continue; const m=this.nb(b,s); if (m && (m.t==='dust'||m.t==='repeater'||m.t==='comparator')) side=Math.max(side, this.into(b,m)); } const o = b.mode==='sub' ? Math.max(0, rear-side) : (rear>=side?rear:0); if (o!==b.tgt){ b.tgt=o; this.at(now+1, () => { b.out = o; }); } break; }
         case 'trapdoor': b.open = this.poweredAt(b) > 0; break;
         case 'piston': pistons.push(b); break;
       }

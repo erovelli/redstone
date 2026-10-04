@@ -18,7 +18,7 @@ const tv = R.makeView($('#theme-stage'), th, { onTick: () => { const want = th.i
 tv.persistent = true; R.hitAt(tv, 0,0,0, 'Light switch lever', () => { th.io.lever.on = !th.io.lever.on; });
 
 /* main nav: ender pearl launcher */
-const NAV = [['Overview','#/'],['Logic','#/category/toggles-and-logic'],['Flying','#/category/flying-machines'],['Doors','#/category/hidden-doors'],['Tests','#/tests'],['Rules','#/rules']];
+const NAV = [['Overview','#/'],['Logic','#/category/toggles-and-logic'],['Flying','#/category/flying-machines'],['Doors','#/category/doors'],['Tests','#/tests'],['Rules','#/rules']];
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const nav = { L:null, view:null, pads:[], busy:null };
 function buildNav(){
@@ -73,11 +73,11 @@ $('#menu').addEventListener('click', () => { const open = document.body.classLis
 /* helpers */
 const clearViews = () => { for (const v of [...R.views]) if (!v.persistent) R.removeView(v); };
 const describe = (w) => { const n = {}; let x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,z0=1e9,z1=-1e9; for (const b of w.c.values()){ n[b.t]=(n[b.t]||0)+1; if (b.t==='ground') continue; x0=Math.min(x0,b.x); x1=Math.max(x1,b.x); y0=Math.min(y0,b.y); y1=Math.max(y1,b.y); z0=Math.min(z0,b.z); z1=Math.max(z1,b.z); }
-  const P = [['piston','piston','pistons'],['observer','observer','observers'],['repeater','repeater','repeaters'],['comparator','comparator','comparators'],['torch','torch','torches'],['dust','dust','dust'],['sculk','sculk sensor','sculk sensors'],['slime','slime','slime'],['honey','honey','honey'],['lamp','lamp','lamps'],['rblock','redstone block','redstone blocks']];
+  const P = [['piston','piston','pistons'],['observer','observer','observers'],['repeater','repeater','repeaters'],['comparator','comparator','comparators'],['torch','torch','torches'],['dust','dust','dust'],['sculk','sculk sensor','sculk sensors'],['slime','slime','slime'],['honey','honey','honey'],['lamp','lamp','lamps'],['rblock','redstone block','redstone blocks'],['barrel','barrel','barrels'],['trapdoor','trapdoor','trapdoors'],['wool','wool','wool']];
   return { parts: P.filter(([k])=>n[k]).map(([k,s,p])=>`${n[k]} ${n[k]===1?s:p}`).join(', '), foot: `${x1-x0+1} × ${y1-y0+1} × ${z1-z0+1} (w × d × h)`, blocks: w.c.size }; };
 const ioState = (w, b) => { if (Array.isArray(b)) return b.map(x => ioState(w,x)).join(' · '); if (!b) return 'n/a';
   switch (b.t){ case 'lever': case 'button': case 'plate': return b.on ? 'on' : 'off'; case 'lamp': return b.lit ? 'lit' : 'dark'; case 'torch': return b.lit ? 'lit' : 'out';
-    case 'sculk': return b.state + (b.on ? `, signal ${b.out}` : ''); case 'observer': return b.on ? 'pulse' : 'idle'; case 'comparator': return `signal ${b.out||0}`;
+    case 'sculk': return b.state + (b.on ? `, signal ${b.out}` : ''); case 'observer': return b.on ? 'pulse' : 'idle'; case 'comparator': return `signal ${b.out||0}${b.mode==='sub'?' (subtract)':''}`;
     case 'repeater': return `${b.delay}t ${b.on?'on':'off'}`; case 'piston': return b.ext ? 'extended' : 'retracted'; case 'rblock': return `at x=${b.x}`; case 'trapdoor': return b.open ? 'open' : 'shut'; case 'barrel': return `fill ${b.fill}`; default: return b.t; } };
 const thumbScale = (box) => { const [x0,x1,y0,y1,z0,z1] = box, cols = x1-x0+1, rows = (z1-z0+1) + (y1-y0+1)*.72; return Math.max(4, Math.min(14, Math.floor(Math.min(240/cols, 140/rows)))); };
 function thumb(el, e){ const built = e.build(C.defaults(e)); built.world.run(4); const keep = R.B; R.setScale(thumbScale(built.box)); const v = R.makeView(el, built, e.plaque ? { skip: b => b.plaque } : {}); v.draw(performance.now()); R.removeView(v); R.setScale(keep); }
@@ -88,7 +88,7 @@ const setActive = key => { side.querySelectorAll('nav a').forEach(a => a.classLi
 /* pages */
 function pageHome(){
   setActive('home'); document.title = 'Redstone kit: catalogue';
-  const nTests = C.entries.reduce((n,e)=>n+e.tests.length,0);
+  const nTests = C.entries.reduce((n,e)=>n+C.testsOf(e).length,0);
   main.innerHTML = `<p class="label">catalogue</p><h1>Redstone kit<span>catalogue</span></h1>
     <p class="lede">A catalogue of redstone contraptions running on a small 3D tick engine. Each component is a parametric builder with named inputs and outputs and its own automated tests. Open one for a test bench: play, pause, step tick by tick, change parameters, and watch every input and output.</p>
     <dl class="stats"><div><dt>components</dt><dd>${C.entries.length}</dd></div><div><dt>categories</dt><dd>${C.CATEGORIES.length}</dd></div><div><dt>tests</dt><dd>${nTests}</dd></div></dl>
@@ -112,13 +112,15 @@ function pageRules(){
       <li><b>Slime and honey.</b> Drag their neighbors, but not each other. Slime conducts power; honey does not. Immovable neighbors are skipped.</li>
       <li><b>Block dropping.</b> A sticky piston that retracts 1 tick after pushing leaves the blocks behind.</li>
       <li><b>Sculk sensors.</b> Hear vibrations (pistons, buttons, levers, footsteps) within 8 blocks unless wool is on the line. Vibrations travel about 1 block per game tick. Active 15 ticks, then a 5-tick cooldown. Signal strength falls with distance.</li>
+      <li><b>Torches.</b> Turn off 1 tick after the block they hang on is powered. They power the components around them and strongly power the block directly above, so torch towers carry a signal upward.</li>
+      <li><b>Comparators.</b> Read a barrel or a signal at the rear and the strongest dust, repeater or comparator at either side. Compare mode passes the rear unless a side is stronger; subtract mode outputs rear minus side.</li>
       <li><b>Redstone blocks.</b> Movable power sources that power adjacent components and dust, but not the face of a piston.</li>
       <li><b>Items and trapdoors.</b> Item entities use Java item physics (gravity 0.04, drag 0.98 per game tick, 2 game ticks per redstone tick). A slime block moved by a piston into an item launches it. Trapdoors open while powered.</li>
     </ul>
     <h2>Simplifications</h2>
     <ul class="rules">
       <li>Updates run per redstone tick in a fixed order. Java's block-event queue and 0-tick behavior are not modeled, so results that depend on same-tick ordering can differ.</li>
-      <li>No quasi-connectivity, no dust on slopes, and no comparator subtract mode. Torches do not power the block above them. Comparators read barrels only.</li>
+      <li>No quasi-connectivity, no dust on slopes, no torch burnout, and dust does not power the block beneath it. Comparators read barrels only.</li>
       <li>Some builders use wiring links (a feed block strongly powers listed cells) to stand in for vertical or buried wiring the engine cannot route. Each entry's notes say where.</li>
       <li>The sculk signal strength is an approximation by distance; frequency outputs are not modeled.</li>
       <li>Items are points with simple per-axis collision. Trapdoors are immovable top-half trapdoors.</li>
@@ -139,7 +141,7 @@ function pageTests(){
     <p class="lede">Every component ships with automated tests that run the real engine headlessly. Run them all here, or one component at a time from its bench.</p>
     <div class="toolbar"><button class="btn primary" id="runall" type="button">Run all tests</button><span id="sum" class="muted"></span></div>
     <div class="table-wrap"><table class="tests-table"><thead><tr><th>Component</th><th>Category</th><th>Tests</th><th>Result</th><th>Time</th></tr></thead><tbody>
-    ${C.entries.map(e => `<tr data-id="${e.id}"><td><a href="#/c/${e.id}">${e.name}</a></td><td>${e.category}</td><td>${e.tests.length}</td><td class="res">${resText(e.id)}</td><td class="ms"></td></tr>`).join('')}</tbody></table></div>`;
+    ${C.entries.map(e => `<tr data-id="${e.id}"><td><a href="#/c/${e.id}">${e.name}</a></td><td>${e.category}</td><td>${C.testsOf(e).length}</td><td class="res">${resText(e.id)}</td><td class="ms"></td></tr>`).join('')}</tbody></table></div>`;
   $('#runall').addEventListener('click', async () => { let p=0, f=0, t0 = performance.now();
     for (const e of C.entries){ const row = main.querySelector(`tr[data-id="${e.id}"]`); row.querySelector('.res').textContent = 'running'; await new Promise(r => setTimeout(r, 10));
       const r = C.runTests(e); results[e.id] = r; r.forEach(x => x.pass ? p++ : f++); row.querySelector('.res').innerHTML = resText(e.id); row.querySelector('.ms').textContent = r.reduce((n,x)=>n+x.ms,0)+' ms'; markDots(); }
@@ -170,7 +172,7 @@ function pageComponent(e){
       <div class="panel"><h2 class="h3">Inputs and outputs</h2><table class="mon" id="mon"></table></div>
       <div class="panel"><h2 class="h3">Event log</h2><ol class="log" id="log" reversed></ol></div>
     </div>
-    <div class="panel"><div class="sec-head"><h2 class="h3">Tests</h2><button class="btn small" id="runtests" type="button">Run tests</button></div><ul class="testlist" id="tests">${e.tests.map(t=>`<li><span class="st">not run</span> ${t.name}</li>`).join('')}</ul></div>
+    <div class="panel"><div class="sec-head"><h2 class="h3">Tests</h2><button class="btn small" id="runtests" type="button">Run tests</button></div><ul class="testlist" id="tests">${C.testsOf(e).map(t=>`<li><span class="st">not run</span> ${t.name}</li>`).join('')}</ul></div>
     <div class="cols">
       <div class="panel"><h2 class="h3">Spec</h2><dl class="spec"><dt>Inputs</dt><dd>${e.inputs.join(', ')}</dd><dt>Outputs</dt><dd>${e.outputs.join(', ')}</dd><dt>Timing</dt><dd>${e.timing}</dd><dt>Footprint</dt><dd id="foot"></dd><dt>Parts</dt><dd id="parts"></dd></dl></div>
       <div class="panel"><h2 class="h3">Notes and constraints</h2>${e.notes ? `<ul class="notes">${e.notes.map(n=>`<li>${n}</li>`).join('')}</ul>` : '<p class="muted">None.</p>'}</div>
@@ -200,7 +202,7 @@ function pageComponent(e){
     if (e.plaque) built.bands.forEach((z0,k) => { const r = v.front(0, built.F-3, z0+1); R.layer(stage, r.x, r.y, built.W*R.B, 2*R.B, 'layer plaque', `<div><b>Band ${k+1}</b> your text here</div>`); });
     const fns = [];
     for (const c of e.controls){
-      const b = built.io && built.io[c.io]; if (!b && c.kind!=='fill' && c.kind!=='action') continue;
+      const b = built.io && built.io[c.io]; if (!b && c.kind!=='action') continue;
       if (c.kind==='lever'){ const btn = mk('', () => { b.on = !b.on; built.world.vibrate(b.x,b.y,b.z,'lever'); }); fns.push(() => { btn.textContent = `${c.label}: ${b.on?'on':'off'}`; btn.setAttribute('aria-pressed', b.on); }); R.hitAt(v, b.x, b.y, b.z, `${c.label} (click to flip)`, () => btn.click()); }
       if (c.kind==='button'){ const fire = () => { if (b.on) return; b.on = true; built.world.vibrate(b.x,b.y,b.z,'button'); built.world.at(built.world.t+10, () => { b.on = false; }); }; mk(c.label, fire); R.hitAt(v, b.x, b.y, b.z, c.label, fire); }
       if (c.kind==='plate'){ const fire = () => { b.on = true; st.hold = 30; }; mk(c.label, fire); R.hitAt(v, b.x, b.y, b.z, c.label, fire); }

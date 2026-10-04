@@ -3,9 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "description": "A 3D redstone tick engine with a catalogue of tested, parametric contraptions and a browser test bench.",
+  "main": "src/catalogue.js",
+  "exports": {
+    ".": "./src/catalogue.js",
+    "./engine": "./src/engine.js"
+  },
   "scripts": {
     "test": "node test/run.js",
     "build": "python3 build.py"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }

@@ -35,6 +35,8 @@ function cubeArt(b, face){
     case 'barrel': return face==='top' ? art('barrelT', R => { R(0,0,8,8,'#7a5530'); R(1,1,6,6,'#9a7040'); R(3,3,2,2,'#4e361b'); }) : art('barrelF', R => { R(0,0,8,8,'#9a7040'); R(0,2,8,.5,'#6e4e2a'); R(0,5.5,8,.5,'#6e4e2a'); R(2,0,.5,8,'#b88b54'); R(5.5,0,.5,8,'#b88b54'); });
     case 'lamp': return art('lamp'+!!b.lit, R => b.lit ? (R(0,0,8,8,'#ffd56e'), R(1,1,6,6,'#fff0b8'), R(3.5,0,1,8,'#f2b84a'), R(0,3.5,8,1,'#f2b84a')) : (R(0,0,8,8,'#6a4a2a'), R(1,1,6,6,'#55391e'), R(3.5,0,1,8,'#7b5833'), R(0,3.5,8,1,'#7b5833')));
     case 'ground': { const f = hex(pal.floor||'#cfc8b8'); return face==='top' ? art('gT'+pal.floor, R => { R(0,0,8,8,pal.floor); R(0,0,8,.5,pal.line); R(0,0,.5,8,pal.line); }) : art('gF'+pal.floor, R => { R(0,0,8,8,mix(f,[0,0,0],.38)); R(0,0,8,1,mix(f,[0,0,0],.18)); R(2,3,1,1,mix(f,[0,0,0],.5)); R(5,5,1,1,mix(f,[0,0,0],.5)); }); }
+    case 'rblock': return art('rblock', R => { R(0,0,8,8,'#b0170c'); R(0,0,8,.5,'#e0402c'); R(0,0,.5,8,'#e0402c'); R(0,7.5,8,.5,'#6e0c05'); R(7.5,0,.5,8,'#6e0c05'); R(1.5,1.5,2,2,'#ff5a3c'); R(4.5,4.5,2,2,'#ff5a3c'); R(4.5,1.5,2,2,'#7c0f07'); R(1.5,4.5,2,2,'#7c0f07'); });
+    case 'planks': return art('planks', R => { R(0,0,8,8,'#a4783f'); R(0,1.75,8,.25,'#6e4c24'); R(0,3.75,8,.25,'#6e4c24'); R(0,5.75,8,.25,'#6e4c24'); R(0,7.75,8,.25,'#6e4c24'); R(3,0,.25,1.75,'#6e4c24'); R(6,2,.25,1.75,'#6e4c24'); R(1.5,4,.25,1.75,'#6e4c24'); R(5,6,.25,1.75,'#6e4c24'); });
     case 'wall': return art('wall', R => { R(0,0,8,8,'#4d4d56'); R(0,3.5,8,.5,'#3a3a42'); R(0,7.5,8,.5,'#3a3a42'); R(3.5,0,.5,3.5,'#3a3a42'); R(7.5,4,.5,3.5,'#3a3a42'); R(0,0,8,.5,'#5d5d67'); });
     case 'piston': { const v = (face==='top'?TOP:FRONT)[b.d], s=!!b.s, e=!!b.ext;
       if (v==='face') return art(`pf${s}${e}`, R => { R(0,0,8,8,'#b58b52'); R(0,0,8,.5,'#d0a873'); if (e){ R(1,1,6,6,'#3a3a40'); R(3,3,2,2,'#7d5d30'); } else { if (s) R(2,2,4,4,'#7bcb52'); R(3.5,3.5,1,1,'#7d5d30'); } });
@@ -54,9 +56,9 @@ const DOFF=[74,16,11], DON=[255,52,32];
 function flatArt(b){
   switch (b.t){
     case 'dust': { const lv=b.lvl||0, pts=(b.pts||[]).join(''); return art(`d${lv}${pts}`, R => { const c=mix(DOFF,DON,lv/15); R(3,3,2,2,c); for (const d of b.pts||[]){ if (d==='N') R(3.25,0,1.5,3,c); if (d==='S') R(3.25,5,1.5,3,c); if (d==='W') R(0,3.25,3,1.5,c); if (d==='E') R(5,3.25,3,1.5,c); } }); }
-    case 'repeater': case 'comparator': { const lit = b.t==='repeater' ? !!b.on : b.out>0, dl = b.delay||1;
-      return art(`${b.t}${b.d}${lit}${dl}`, (R,x) => { rot(x,b.d); R(0,0,8,8,'#b4b4ba'); R(0,0,8,.5,'#d0d0d6'); R(0,7.5,8,.5,'#8e8e96'); const on='#ff3420', off='#6a1d16';
-        if (b.t==='repeater'){ R(3,1,2,2, lit?on:off); R(3,2+dl,2,2, lit?on:off); } else { R(3,1,2,2, lit?on:off); R(1,5,2,2, lit?on:off); R(5,5,2,2, lit?on:off); } }); }
+    case 'repeater': case 'comparator': { const lit = b.t==='repeater' ? !!b.on : b.out>0, dl = b.delay||1, sub = b.mode==='sub';   // comparator: front torch lit in subtract mode
+      return art(`${b.t}${b.d}${lit}${dl}${sub}`, (R,x) => { rot(x,b.d); R(0,0,8,8,'#b4b4ba'); R(0,0,8,.5,'#d0d0d6'); R(0,7.5,8,.5,'#8e8e96'); const on='#ff3420', off='#6a1d16';
+        if (b.t==='repeater'){ R(3,1,2,2, lit?on:off); R(3,2+dl,2,2, lit?on:off); } else { R(3,1,2,2, sub?on:off); R(1,5,2,2, lit?on:off); R(5,5,2,2, lit?on:off); } }); }
     case 'plate': return art('plate'+!!b.on, R => b.on ? (R(1,1,6,6,'#7a7a82'), R(1,1,6,.5,'#5f5f67')) : (R(1,1,6,6,'#a6a6ad'), R(1,6.5,6,.5,'#6f6f77'), R(1,1,6,.5,'#c4c4ca')));
     case 'torch': return art('torch'+!!b.lit, R => { R(3.5,2,1,5,'#7d5d30'); R(3,1,2,2, b.lit?'#ff4a2a':'#5a1a14'); });
     case 'button': return art('btn'+!!b.on, R => b.on ? (R(2.5,2.5,3,3,'#6f6f77')) : (R(2,2,4,4,'#a6a6ad'), R(2,5.5,4,.5,'#6f6f77')));
