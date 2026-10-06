@@ -20,44 +20,88 @@ tv.persistent = true; R.hitAt(tv, 0,0,0, 'Light switch lever', () => { th.io.lev
 /* main nav: ender pearl launcher */
 const NAV = [['Overview','#/'],['Logic','#/category/toggles-and-logic'],['Flying','#/category/flying-machines'],['Doors','#/category/doors'],['Tests','#/tests'],['Rules','#/rules']];
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const launchHint = 'Choose a barrel to launch and teleport.';
 const nav = { L:null, view:null, pads:[], busy:null };
+// The wall shows the label, barrel and one stone row; it grows to the launcher's full depth while one is in use.
+const OPEN_PHASES = ['revealing','receding','opening','dropping','launching','flying','withdrawing'];
+function syncNav(){
+  const b = nav.busy, it = b && nav.L.items[b.i];
+  $('#launch-stage').classList.toggle('open', !!(it && OPEN_PHASES.includes(it.phase)));
+}
+// One block is the same size for the wall, barrels, pistons and slime.
+const navScale = L => Math.max(12, Math.min(48, Math.floor($('#launch').clientWidth / L.cols)));
+// Note block "harp": pitch 0..24 is F#3..F#5, a plucked tone that dies away. Only plays after a click (browser autoplay rules).
+let audio = null;
+function noteBlock(pitch){
+  if (reduceMotion) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const t = audio.currentTime, f = 369.99 * Math.pow(2, (pitch-12)/12), out = audio.createGain();
+    out.gain.setValueAtTime(0, t); out.gain.linearRampToValueAtTime(.18, t+.005); out.gain.exponentialRampToValueAtTime(.0008, t+.9);
+    const tone = audio.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = f*6; tone.connect(out); out.connect(audio.destination);
+    for (const [type, mult, level] of [['triangle',1,1],['sine',2,.35],['sine',3,.12]]){
+      const o = audio.createOscillator(), g = audio.createGain(); o.type = type; o.frequency.value = f*mult; g.gain.value = level;
+      o.connect(g); g.connect(tone); o.start(t); o.stop(t+1);
+    }
+  } catch(e){}
+}
 function buildNav(){
   const st = $('#launch-stage'); st.innerHTML = ''; if (nav.view) R.removeView(nav.view);
-  const L = nav.L || (nav.L = buildLauncherNav(NAV.length)); if (!L.warm){ L.world.run(4); L.warm = true; }
-  const cols = 4*NAV.length+1, avail = $('#launch').clientWidth || width();
-  const Bn = Math.max(14, Math.min(18, Math.floor(avail/cols))), Tn = Math.round(Bn*.5);
-  nav.view = R.makeView(st, L, { B:Bn, T:Tn }); nav.view.persistent = true;
-  st.style.height = (parseFloat(st.style.height) + 4) + 'px';
-  nav.pads = NAV.map(([label, href], i) => { const it = L.items[i], a = document.createElement('a'); a.className = 'pad'; a.href = href;
-    Object.assign(a.style, { left:(it.x0+1)*Bn+'px', top:'0px', width:3*Bn+'px', height:st.style.height });
-    a.innerHTML = `<span>${label}</span>`; a.setAttribute('aria-label', `${label} (drops an ender pearl)`); a.dataset.i = i; st.appendChild(a); return a; });
-  markNav();
+  const L = nav.L || (nav.L = buildHiddenLauncherNav(NAV.length)); if (!L.warm){ L.world.run(4); L.warm = true; }
+  const B = navScale(L);
+  const v = nav.view = R.makeNavView(st, L, { B, overlay:$('#pearl-sky'), onNote:n => noteBlock(n.pitch) });
+  v.persistent = true;
+  // Closed, the wall shows its top lip, the labels, the barrels with the side launcher's covers, and one row below; open, the launcher rows too.
+  const below = v.front(0, 0, -2).y;
+  st.style.width = v.W+'px'; st.style.setProperty('--closed', below+'px'); st.style.setProperty('--open', v.H+'px'); st.style.setProperty('--b', B+'px');
+  nav.pads = NAV.map(([label,href],i) => {
+    const it = L.items[i], c = v.front(it.xc-1, 0, 1);
+    const a = document.createElement('a'); a.className = 'pad'; a.href = href; a.dataset.i = i;
+    Object.assign(a.style, { left:c.x+'px', top:c.y+'px', width:3*B+'px', height:2*B+'px' });
+    a.innerHTML = `<span>${label}</span>`; a.setAttribute('aria-label', `${label} (opens the barrel and its hidden pearl launcher)`);
+    st.appendChild(a); return a;
+  });
+  if (nav.busy){ nav.pads.forEach(p=>p.setAttribute('aria-disabled','true')); nav.pads[nav.busy.i].classList.add('launching'); }
+  v.draw(performance.now()); syncNav(); markNav();
 }
 function markNav(){ const h = lastHash || '#/'; nav.pads.forEach((p,i) => { const href = NAV[i][1]; const on = href==='#/' ? h==='#/' : h.startsWith(href); on ? p.setAttribute('aria-current','page') : p.removeAttribute('aria-current'); }); }
 function launch(i){
   const L = nav.L, it = L.items[i], href = NAV[i][1];
   if (nav.busy) return;
   if (reduceMotion){ navigate(href); return; }
-  if (L.where(it) !== 'in the box') L.restock(it);
-  nav.busy = { i, href, t0: performance.now() };
-  it.button.on = true; L.world.vibrate(it.button.x, it.button.y, it.button.z, 'button'); L.world.at(L.world.t+10, () => { it.button.on = false; });
+  if (!L.release(it)) return;
+  nav.busy = { i, href };
+  nav.pads.forEach(p => p.setAttribute('aria-disabled','true')); nav.pads[i].classList.add('launching');
+  syncNav(); $('#launch-hint').textContent = `Opening the ${NAV[i][0]} launcher…`;
 }
 function watchLaunch(){
-  const b = nav.busy; if (!b || b.warping) return;
-  const L = nav.L, it = L.items[b.i];
-  if (it.pearl.gone || it.pearl.y > 5.5 || performance.now() - b.t0 > 4000){
-    b.warping = true;
-    const rect = nav.view.stage.getBoundingClientRect(), q = nav.view.plane(it.xc, 3, 0);
-    warp(rect.left + (it.xc+.5)*nav.view.B, Math.min(innerHeight-20, rect.top + q.y + nav.view.T), () => { navigate(b.href); },
-      () => { setTimeout(() => { L.restock(it); nav.busy = null; }, 300); });
+  const b = nav.busy; if (!b) return;
+  const L = nav.L, it = L.items[b.i], view = nav.view, name = NAV[b.i][0];
+  syncNav();
+  if (b.cancelled || b.landed){ if (L.ready(it)) finishLaunch(b); return; }
+  const phase = L.where(it), p = it.pearl;
+  const hint = ['revealing','receding','opening'].includes(phase) ? `Opening the ${name} launcher…` : phase==='launched' ? `${name}: pearl in flight…` : phase==='launching' ? `Launching ${name}…` : `${name}: dropping onto the slime launcher…`;
+  if ($('#launch-hint').textContent!==hint) $('#launch-hint').textContent = hint;
+  // The pearl lands once its whole sprite has left the viewport.
+  const q = view.screenOf(p);
+  if (phase === 'launched' && (p.gone || q.x+q.r < 0 || q.y+q.r < 0 || q.x-q.r > innerWidth || q.y-q.r > innerHeight)){
+    b.landed = true; p.visible = false;
+    $('#launch-hint').textContent = `Teleported to ${name}.`;
+    b.cancelWarp = terrainScreen();
+    navigate(b.href);
   }
 }
-function warp(x, y, mid, done){
-  const w = $('#warp'); w.style.setProperty('--wx', x+'px'); w.style.setProperty('--wy', y+'px');
-  for (let k=0;k<14;k++){ const s = document.createElement('div'); s.className='spark'; s.style.left = x+'px'; s.style.top = y+'px'; document.body.appendChild(s);
-    const a = Math.random()*Math.PI*2, d = 60 + Math.random()*160; s.animate([{ transform:'translate(0,0)', opacity:1 }, { transform:`translate(${Math.cos(a)*d}px,${Math.sin(a)*d}px) scale(.3)`, opacity:0 }], { duration:520+Math.random()*300, easing:'ease-out' }).onfinish = () => s.remove(); }
-  w.className = ''; void w.offsetWidth; w.className = 'cover';
-  setTimeout(() => { mid(); w.className = 'reveal'; setTimeout(() => { w.className = ''; done && done(); }, 340); }, 400);
+function finishLaunch(b){
+  if (nav.busy !== b) return;
+  if (!nav.L.restock(nav.L.items[b.i])){ b.cancelled = true; return; }
+  nav.busy = null; syncNav();
+  nav.pads.forEach(p => { p.removeAttribute('aria-disabled'); p.classList.remove('launching'); }); $('#launch-hint').textContent = launchHint;
+}
+// The old between-dimensions screen: dark dirt and "Downloading terrain", held for half a second.
+function terrainScreen(){
+  const s = $('#terrain'); s.style.backgroundImage = `url("${R.dirtTexture()}")`; s.hidden = false;
+  const t = setTimeout(() => { s.hidden = true; }, 500);
+  return () => { clearTimeout(t); s.hidden = true; };
 }
 
 /* sidebar */
@@ -266,7 +310,10 @@ function refreshPresentation(){
   else if (main.querySelector('[data-thumb]')) route(true);
   for (const v of R.views) v.draw(performance.now());
 }
-function navigate(h){ current = h; try { if (location.hash !== h) history.pushState(null, '', h); } catch(e){} route(); }
+function navigate(h){
+  if (nav.busy && h !== nav.busy.href){ nav.busy.cancelled = true; if (nav.busy.cancelWarp) nav.busy.cancelWarp(); }
+  current = h; try { if (location.hash !== h) history.pushState(null, '', h); } catch(e){} route();
+}
 function route(force){
   let h = current || location.hash || '#/'; if (!h.startsWith('#/')) h = lastHash || '#/';
   if (h === lastHash && !force) return; lastHash = h;
@@ -280,9 +327,9 @@ function route(force){
   if (!force) { main.focus({ preventScroll:true }); window.scrollTo(0,0); }
   if (nav.pads.length) markNav();
 }
-addEventListener('hashchange', () => { if (location.hash.startsWith('#/')){ current = location.hash; route(); } });
-addEventListener('popstate', () => { const h = location.hash || '#/'; if (!h.startsWith('#/')) return; current = h; route(); });
-document.addEventListener('click', ev => { const pad = ev.target.closest && ev.target.closest('a.pad'); if (pad){ ev.preventDefault(); launch(+pad.dataset.i); return; } const a = ev.target.closest && ev.target.closest('a[href^="#/"]'); if (!a || ev.metaKey || ev.ctrlKey || ev.shiftKey) return; ev.preventDefault(); navigate(a.getAttribute('href')); });
+addEventListener('hashchange', () => { if (location.hash.startsWith('#/')){ navigate(location.hash); } });
+addEventListener('popstate', () => { const h = location.hash || '#/'; if (!h.startsWith('#/')) return; navigate(h); });
+document.addEventListener('click', ev => { if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return; const pad = ev.target.closest && ev.target.closest('a.pad'); if (pad){ ev.preventDefault(); launch(+pad.dataset.i); return; } const a = ev.target.closest && ev.target.closest('a[href^="#/"]'); if (!a) return; ev.preventDefault(); navigate(a.getAttribute('href')); });
 addEventListener('keydown', ev => { if (!bench || ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) return;
   if (ev.key === ' ' && document.activeElement.tagName !== 'BUTTON'){ ev.preventDefault(); bench.setPaused(!bench.paused); }
   if (ev.key === '.' && bench.paused) tickView(bench.view);
@@ -298,5 +345,7 @@ setInterval(() => { const now = performance.now(), dt = now - last; last = now;
 const frame = now => { for (const v of R.views) if (v.anim) v.draw(now); requestAnimationFrame(frame); };
 requestAnimationFrame(frame);
 buildSide(); route(); buildNav();
+// Rebuild the wall when its width changes the block size (also covers a tab first laid out while hidden).
+new ResizeObserver(() => { if (nav.view && navScale(nav.L) !== nav.view.B) buildNav(); }).observe($('#launch'));
 let lw = innerWidth; addEventListener('resize', () => { clearTimeout(window.__rz); window.__rz = setTimeout(() => { if (innerWidth !== lw){ lw = innerWidth; refreshPresentation(); buildNav(); } }, 250); });
 })();

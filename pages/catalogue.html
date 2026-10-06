@@ -79,19 +79,26 @@ footer nav{ font-size:.78rem; }
 
 .wrap{ max-width:1180px; }
 .top{ background:var(--bg); padding-top:10px; }
-.launch{ display:block; margin:14px 0 0; padding:10px 0 4px; border-bottom:1px solid var(--line); }
-.launch-scroll{ overflow-x:auto; overflow-y:hidden; padding-bottom:32px; }
-.launch .stage{ margin:0 auto; }
-.pad{ position:absolute; z-index:3; display:flex; align-items:flex-end; justify-content:center; text-decoration:none; color:var(--muted); font-size:.74rem; }
-.pad span{ transform:translateY(100%); padding-top:4px; white-space:nowrap; }
-.pad:hover span, .pad:focus-visible span{ color:var(--accent); }
-.pad[aria-current="page"] span{ color:var(--heading); font-weight:500; border-bottom:2px solid var(--accent); }
-.pad:focus-visible{ outline:2px dashed var(--accent); outline-offset:-2px; }
-.launch-hint{ margin:22px 0 0; text-align:center; font-size:.7rem; color:var(--muted); }
-#warp{ position:fixed; inset:0; z-index:100; pointer-events:none; background:radial-gradient(circle at var(--wx,50%) var(--wy,50%), #4b1a6b 0, #1f0a33 45%, #0b0414 100%); clip-path:circle(0 at var(--wx,50%) var(--wy,50%)); opacity:1; }
-#warp.cover{ transition:clip-path .38s cubic-bezier(.6,0,.9,.4); clip-path:circle(150vmax at var(--wx,50%) var(--wy,50%)); }
-#warp.reveal{ transition:opacity .32s ease-out; clip-path:circle(150vmax at var(--wx,50%) var(--wy,50%)); opacity:0; }
-.spark{ position:fixed; z-index:101; width:6px; height:6px; background:#c98bff; box-shadow:0 0 6px #b06bff; pointer-events:none; }
+.launch{ display:block; margin:14px 0 0; padding:8px 0; border-bottom:1px solid var(--line); overflow:clip; }
+.launch-scroll{ overflow:visible; }
+/* The wall is drawn at real block scale: one block per barrel, piston or slime block. */
+.launch #launch-stage{ position:relative; margin:0 auto; height:var(--closed); overflow:hidden; transition:height .28s ease; }
+.launch #launch-stage.open{ height:var(--open); }
+#launch-stage canvas{ position:absolute; left:0; top:0; image-rendering:pixelated; pointer-events:none; }
+/* Labels are small versions of the hidden plaque's text bands. */
+.pad{ position:absolute; z-index:2; display:block; text-decoration:none; }
+.pad span{ position:absolute; left:50%; top:25%; transform:translate(-50%,-50%); display:block; padding:0 calc(var(--b) * .16); line-height:calc(var(--b) * .62); background:#1d1a22; box-shadow:inset 0 0 0 2px #2c2833; font-family:var(--cond); font-weight:400; font-size:clamp(9px, calc(var(--b) * .4), 17px); color:#efe6d4; white-space:nowrap; }
+.pad::after{ content:''; position:absolute; left:33.33%; top:50%; width:33.33%; height:50%; box-sizing:border-box; }
+.pad:hover::after{ background:rgba(255,255,255,.14); }
+.pad:hover span, .pad[aria-current="page"] span{ color:#ffd56e; font-weight:600; }
+.pad.launching::after, .pad[aria-current="page"]::after{ outline:2px solid var(--accent); outline-offset:1px; }
+.pad:focus-visible{ outline:none; } .pad:focus-visible::after{ outline:2px dashed var(--accent); outline-offset:2px; }
+@media(prefers-reduced-motion:reduce){ .launch #launch-stage{ transition:none; } }
+.launch-hint{ margin:6px 0 8px; text-align:center; font-size:.7rem; color:var(--muted); }
+#pearl-sky{ position:fixed; left:0; top:0; z-index:90; pointer-events:none; image-rendering:pixelated; }
+#terrain{ position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center; background-color:#211810; background-size:64px 64px; image-rendering:pixelated; box-shadow:inset 0 0 0 100vmax rgba(0,0,0,.62); }
+#terrain[hidden]{ display:none; }
+#terrain p{ margin:0 0 12vh; font-family:var(--display); font-weight:500; font-size:26px; color:#fff; text-shadow:3px 3px 0 #3f3f3f; }
 .menu{ display:none; font:inherit; font-size:.8rem; border:2px solid var(--edge); background:var(--surface); color:var(--text); padding:3px 10px; cursor:pointer; }
 .layout{ display:grid; grid-template-columns:230px minmax(0,1fr); gap:34px; margin-top:22px; }
 #side{ position:sticky; top:64px; align-self:start; max-height:calc(100vh - 80px); overflow:auto; font-size:.82rem; padding-right:6px; }
@@ -150,7 +157,7 @@ pre{ white-space:pre-wrap; font-size:.74rem; background:var(--bg); border:1px so
 .tests-table th, .tests-table td{ text-align:left; padding:7px 10px; border-bottom:1px solid var(--line); white-space:nowrap; } .tests-table th{ font-weight:500; color:var(--muted); }
 @media (max-width: 860px){
   .menu{ display:inline-block; }
-  .layout{ grid-template-columns:1fr; }
+  .layout{ grid-template-columns:minmax(0,1fr); }
   #side{ display:none; position:static; max-height:none; border:2px solid var(--edge); background:var(--surface); padding:10px; }
   body.nav-open #side{ display:block; }
   .cols{ grid-template-columns:1fr; }
@@ -159,13 +166,14 @@ pre{ white-space:pre-wrap; font-size:.74rem; background:var(--bg); border:1px so
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<div id="warp" aria-hidden="true"></div>
+<canvas id="pearl-sky" aria-hidden="true"></canvas>
+<div id="terrain" hidden aria-hidden="true"><p>Downloading terrain</p></div>
 <div class="wrap">
   <header class="top">
     <a class="brand" href="#/"><i>RS</i>redstone kit</a>
     <span style="display:flex;align-items:center;gap:14px"><button class="menu" id="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button><span class="rig"><span class="stage" id="theme-stage"></span>lights</span></span>
   </header>
-  <nav class="launch" id="launch" aria-label="Main"><div class="launch-scroll"><div class="stage" id="launch-stage"></div></div><p class="launch-hint">Each nav button is a machine: press it and the pearl drops onto a slime launcher.</p></nav>
+  <nav class="launch" id="launch" aria-label="Main"><div class="launch-scroll"><div class="stage" id="launch-stage"></div></div><p class="launch-hint" id="launch-hint" aria-live="polite">Choose a barrel to launch and teleport.</p></nav>
   <div class="layout">
     <aside id="side" aria-label="Catalogue navigation"></aside>
     <div><div class="measure" id="measure"></div><main id="main" tabindex="-1"></main></div>

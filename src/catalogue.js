@@ -7,7 +7,7 @@ const Sc = N ? require('./contraptions/scenes.js') : window.Scenes;
 const { buildDoor } = N ? require('./contraptions/door.js') : window;
 const { buildHidden } = N ? require('./contraptions/hidden.js') : window;
 const { buildPlaque } = N ? require('./contraptions/plaque.js') : window;
-const { buildLauncherNav } = N ? require('./contraptions/launcher.js') : window;
+const { buildLauncherNav, buildSharedLauncherNav, buildHiddenLauncherNav } = N ? require('./contraptions/launcher.js') : window;
 const { buildPistonDoor } = N ? require('./contraptions/pistondoor.js') : window;
 
 const press = (w,b,n=10) => { b.on = true; w.at(w.t+n, () => { b.on = false; }); };
@@ -233,7 +233,171 @@ const entries = [
   build:(p) => { const L=buildLauncherNav(p.items); const it=L.items[0]; L.io={ button:it.button, trapdoor:it.trapdoor, pistonL:it.pistons[0], pistonR:it.pistons[1] }; return L; },
   tests:[ T('drops, lands, and launches off screen', () => { const L=buildLauncherNav(1), w=L.world, it=L.items[0]; w.run(4); press(w,it.button); let landed=false, launched=-1; for (let t=1;t<30;t++){ w.tick(); if (L.where(it)==='on the launcher') landed=true; if (launched<0 && it.pearl.y>6) launched=t; } return landed && launched>0 && launched<14; }),
           T('resets to identical blocks and relaunches after restock', () => { const L=buildLauncherNav(2), w=L.world, it=L.items[0], sn=()=>snapIn(w,()=>true); w.run(4); const s0=sn(); press(w,it.button); w.run(40); const a = sn()===s0; L.restock(it); press(w,it.button); w.run(40); return a && sn()===s0 && L.where(it)==='launched'; }),
-          T('neighboring pearls stay put', () => { const L=buildLauncherNav(3), w=L.world; w.run(4); press(w,L.items[1].button); w.run(40); return L.where(L.items[1])==='launched' && L.where(L.items[0])==='in the box' && L.where(L.items[2])==='in the box'; }) ] },
+          T('neighboring pearls stay put', () => { const L=buildLauncherNav(3), w=L.world; w.run(4); press(w,L.items[1].button); w.run(40); return L.where(L.items[1])==='launched' && L.where(L.items[0])==='in the box' && L.where(L.items[2])==='in the box'; }),
+          T('shared navigation has two sticky pistons and rails within the push limit', () => [1,2,3,4,5,6].every(n => { const L=buildSharedLauncherNav(n), ps=[...L.world.c.values()].filter(b=>b.t==='piston'); return L.items.length===n && ps.length===2 && ps.every(p=>p.s) && ps.some(p=>p.d==='U') && ps.some(p=>p.d==='S') && L.lower.length<=12 && L.upper.length<=12; })),
+          T('every crate drops straight down and both pistons launch its pearl diagonally', () => {
+            for (const n of [1,2,3,4,5,6]) for (let i=0;i<n;i++){
+              const L=buildSharedLauncherNav(n), w=L.world, it=L.items[i]; w.run(4); if (!L.release(it)) return false;
+              let dropped=false, landed=false, up=false, side=false;
+              for (let t=0;t<20;t++){
+                w.tick(); const p=it.pearl;
+                if (L.where(it)==='dropping'){
+                  if (p.x!==it.home[0] || p.y!==it.home[1] || p.vx!==0 || p.vy!==0 || p.z>=it.home[2]) return false;
+                  dropped=true;
+                }
+                if (p.ground && p.z===1) landed=true;
+                if (L.pistons[0].ext && !L.pistons[1].ext && p.vz>0 && p.vy===0) up=true;
+                if (L.where(it)==='launched' && p.vy>.05 && p.vz>.05){ side=true; if (!L.ready() && L.restock(it)) return false; }
+                if (L.items.some(other=>other!==it && (L.where(other)!=='in the box' || [other.pearl.x,other.pearl.y,other.pearl.z].some((v,k)=>v!==other.home[k])))) return false;
+              }
+              if (!dropped || !landed || !up || !side || !L.ready() || it.trapdoor.open) return false;
+            }
+            return true;
+          }),
+          T('shared navigation serializes releases and reuses every crate twice', () => {
+            const L=buildSharedLauncherNav(6), w=L.world; w.run(4); const s0=snapIn(w,()=>true);
+            for (let cycle=0;cycle<2;cycle++) for (const it of L.items){
+              if (!L.release(it) || L.release(L.items[(it.i+1)%6])) return false;
+              w.run(20); if (L.where(it)!=='launched' || snapIn(w,()=>true)!==s0 || !L.restock(it) || L.where(it)!=='in the box') return false;
+              w.run(2); if (it.trapdoor.open || it.pearl.z!==it.home[2]) return false;
+            }
+            return true;
+          }),
+          T('every barrel hides its pistons, slime and redstone blocks inside a flush wall', () => [1,2,3,4,5,6].every(n => {
+            const L=buildHiddenLauncherNav(n), w=L.world, ps=[...w.c.values()].filter(b=>b.t==='piston');
+            if (ps.length!==2*n || !L.ready() || [...w.c.values()].some(b=>b.station)) return false;
+            for (let x=0;x<L.cols;x++) for (let z=-5;z<=1;z++){ const b=w.get(x,0,z); if (!b || !['noteblock','jukebox','barrel'].includes(b.t) || w.get(x,1,z)) return false; }
+            return L.items.every(it=>it.barrel.t==='barrel' && it.barrel.y===0 && !it.barrel.open && !it.pearl.visible && it.pistons.every(p=>p.s && p.y===-2) && it.pistons[0].d==='U' && it.pistons[1].d==='E'
+              && [it.lower,it.upper].every(b=>b.t==='slime' && b.y===-2) && it.reds.every((r,k)=>r.t==='rblock' && r.y===-4 && r.x===it.pistons[k].x && r.z===it.pistons[k].z)
+              && it.covers.length===4 && it.covers.every(c=>c.y===0 && c.t==='noteblock' && !w.get(c.x,-1,c.z)));
+          })),
+          T('a redstone block directly behind each launch piston is what fires it', () => {
+            const adj=(a,b)=>Math.abs(a.x-b.x)+Math.abs(a.y-b.y)+Math.abs(a.z-b.z)===1;
+            const L=buildHiddenLauncherNav(3), w=L.world, it=L.items[1]; w.run(4); L.release(it);
+            const fired=[false,false];
+            for (let t=0;t<40;t++){
+              const was=it.pistons.map(p=>p.ext); w.tick();
+              for (const k of [0,1]){
+                const p=it.pistons[k], r=it.reds[k], behind=r.x===p.x && r.z===p.z && r.y===p.y-1;
+                if (!was[k] && p.ext){ if (!behind || p.y!==1) return false; fired[k]=true; }
+                if (adj(r,p) && !behind) return false;
+                if (!!p.ext !== behind && !(was[k] && !p.ext)) return false;
+              }
+            }
+            return fired[0] && fired[1] && it.launched && L.ready(it);
+          }),
+          T('covers recede into the wall, move aside, and the pistons and slime come 3 blocks forward', () => {
+            const L=buildHiddenLauncherNav(2), w=L.world, it=L.items[1]; w.run(4); L.release(it); w.run(3);
+            if (it.phase!=='revealing' || it.covers.some(c=>c.y!==0)) return false;
+            w.tick(); if (!it.covers.every(c=>c.y===-1) || [it.lower,it.upper].some(b=>b.y!==-2)) return false;
+            w.tick(); w.tick(); const g=Object.fromEntries(it.coverGroups.map(g=>[g.name,g.blocks]));
+            if (!g.side.every((c,k)=>c.y===-1 && c.x===[it.xc-1,it.xc-2][k] && c.z===-2) || !g.up.every((c,k)=>c.y===-1 && c.x===it.xc-2 && c.z===[-3,-4][k])) return false;
+            for (const y of [-1,0,1]){ w.tick(); if (![...it.pistons,it.lower,it.upper].every(b=>b.y===y)) return false; if (it.pearl.visible || it.barrel.open) return false; }
+            w.tick(); if (it.phase!=='dropping' || !it.barrel.open || !it.pearl.visible || it.pearl.y!==1.5) return false;
+            const J=buildHiddenLauncherNav(1), j=J.items[0], jw=J.world;
+            jw.put(j.xc-2,-1,-3,'wallb'); J.release(j); jw.run(20);
+            return j.phase==='receding' && !j.pearl.visible && !j.barrel.open && [j.lower,j.upper].every(b=>b.y===-2) && !J.ready(j);
+          }),
+          T('each barrel drops its pearl straight down, then launches it up and to the east', () => {
+            for (const n of [1,2,3,4,5,6]) for (let i=0;i<n;i++){
+              const L=buildHiddenLauncherNav(n), w=L.world, it=L.items[i]; w.run(4); if (!L.release(it)) return false;
+              let dropped=false, landed=false, up=false, east=false;
+              for (let t=0;t<40;t++){
+                w.tick(); const p=it.pearl;
+                if (it.phase==='dropping' && p.z<it.mouth[2]){ if (p.x!==it.mouth[0] || p.y!==it.mouth[1] || p.vx!==0 || p.vy!==0) return false; dropped=true; }
+                if (p.ground && p.z===it.zRest) landed=true;
+                if (it.pistons[0].ext && !it.pistons[1].ext && p.vz>0 && p.vx===0) up=true;
+                if (it.launched && p.vx>.05 && p.vz>.05 && p.y===1.5) east=true;
+                if (L.items.some(o=>o!==it && (o.phase!=='closed' || o.pearl.visible || o.barrel.open || o.covers.some(c=>c.y!==0) || o.pistons.some(p=>p.ext || p.y!==-2)))) return false;
+              }
+              if (!dropped || !landed || !up || !east || !L.ready(it)) return false;
+            }
+            return true;
+          }),
+          T('a moving slime block only ever touches jukeboxes, the barrel or its own machine, so it drags nothing', () => {
+            const D=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
+            const L=buildHiddenLauncherNav(6), w=L.world; w.run(4); let moves=0;
+            for (const it of L.items){
+              if (!L.release(it)) return false;
+              const carriage=[...it.pistons,it.lower,it.upper,...it.reds];
+              for (let t=0;t<45;t++){
+                // during the launch stroke only the slime's own piston may touch it; on the way in and out the whole machine moves together
+                const launch=['launching','flying'].includes(it.phase);
+                const before=[[it.lower,it.pistons[0]],[it.upper,it.pistons[1]]].map(([sl,pusher])=>({ sl, pusher, at:[sl.x,sl.y,sl.z], nb:D.map(([dx,dy,dz])=>w.get(sl.x+dx,sl.y+dy,sl.z+dz)).filter(b=>b && !b.buried) }));
+                w.tick();
+                for (const { sl, pusher, at, nb } of before){
+                  if (sl.x===at[0] && sl.y===at[1] && sl.z===at[2]) continue; moves++;
+                  for (const b of nb){
+                    const own = b===pusher || (b.t==='head' && b.p===pusher) || (!launch && carriage.includes(b));
+                    if (!own && b.t!=='jukebox' && b.t!=='barrel') return false;
+                  }
+                }
+              }
+              if (!it.launched || !L.ready(it) || !L.restock(it)) return false;
+            }
+            return moves===6*2*8;
+          }),
+          T('the note-block covers play a rising chord as a launcher opens and a falling one as it closes, in each barrel\'s own key', () => {
+            const L=buildHiddenLauncherNav(6), w=L.world; w.run(4); const keys=new Set();
+            for (const it of L.items){
+              const from=L.notes.length; L.release(it); for (let t=0;t<45;t++) w.tick();
+              const steps=L.notes.slice(from).filter(n=>n.k===undefined), ps=steps.map(n=>n.pitch);
+              if (steps.length!==6 || steps.some(n=>n.i!==it.i) || ps.some(p=>p<0 || p>24)) return false;
+              if (!(ps[0]<ps[1] && ps[1]<ps[2] && ps[3]>ps[4] && ps[4]>ps[5] && ps[0]===ps[5])) return false;
+              if (L.notes.slice(from).length!==6*it.covers.length) return false;   // every cover sounds on every step
+              keys.add(ps[0]); L.restock(it);
+            }
+            return keys.size===6;
+          }),
+          T('the two slime blocks never touch, so neither piston can drag the other slime', () => {
+            const apart = it => Math.abs(it.lower.x-it.upper.x)+Math.abs(it.lower.y-it.upper.y)+Math.abs(it.lower.z-it.upper.z) > 1;
+            const L=buildHiddenLauncherNav(6), w=L.world; w.run(4);
+            for (const it of L.items){
+              if (!L.release(it)) return false;
+              for (let t=0;t<40;t++){ w.tick(); if (!L.items.every(apart)) return false; }
+              if (!it.launched || !L.ready(it) || !L.restock(it)) return false;
+            }
+            return true;
+          }),
+          T('the launched pearl clears the wall and climbs 8 blocks to the east', () => {
+            const L=buildHiddenLauncherNav(6), w=L.world, it=L.items[0]; L.release(it);
+            for (let t=0;t<40 && !it.launched;t++) w.tick();
+            const p=it.pearl, x0=p.x; let blocked=false;
+            for (let t=0;t<4;t++){ w.tick(); if (p.vx===0 || p.y!==1.5) blocked=true; }
+            return it.launched && !blocked && p.z>8 && p.x-x0>6;
+          }),
+          T('every barrel withdraws, closes flush, and can be reused twice', () => {
+            const L=buildHiddenLauncherNav(6), w=L.world; w.run(4); const s0=snapIn(w,()=>true);
+            for (let cycle=0;cycle<2;cycle++) for (const it of L.items){
+              if (!L.release(it) || L.release(L.items[(it.i+1)%6]) || L.restock(it)) return false;
+              for (let t=0;t<40;t++){ w.tick(); if (it.phase==='withdrawing' && (it.pistons.some(p=>p.ext) || it.barrel.open || L.ready(it) || L.restock(it))) return false; }
+              if (!it.launched || !L.ready(it) || snapIn(w,()=>true)!==s0 || !L.restock(it) || it.pearl.visible || it.launched) return false;
+              if ([it.pearl.x,it.pearl.y,it.pearl.z].some((v,k)=>v!==it.home[k])) return false;
+            }
+            return true;
+          }),
+          T('hidden launchers need real piston contact and preserve projectile gravity and drag', () => {
+            const stopped=buildHiddenLauncherNav(6), sw=stopped.world, si=stopped.items[2];
+            stopped.release(si); for (let t=0;t<12 && si.phase!=='dropping';t++) sw.tick(); si.pistons.forEach(b=>sw.set(b.x,b.y,b.z,null)); sw.run(30);
+            if (si.pearl.x!==si.mouth[0] || si.pearl.y!==si.mouth[1] || si.pearl.z!==si.zRest || !si.pearl.ground || si.launched) return false;
+            const L=buildHiddenLauncherNav(6), w=L.world, it=L.items[2]; L.release(it);
+            for (let t=0;t<40 && !it.launched;t++) w.tick();
+            const p=it.pearl; let x=p.x,z=p.z,vx=p.vx,vz=p.vz;
+            if (!it.launched) return false;
+            for (let gt=0;gt<2;gt++){ x+=vx; z+=vz; vx*=.99; vz=vz*.99-.03; }
+            w.tick(); return Math.abs(p.x-x)<1e-9 && Math.abs(p.z-z)<1e-9 && Math.abs(p.vx-vx)<1e-9 && Math.abs(p.vz-vz)<1e-9 && p.y===it.mouth[1] && p.vy===0;
+          }),
+          T('nav motion needs real pistons and flight follows gravity and drag', () => {
+            const stopped=buildSharedLauncherNav(6), sw=stopped.world, si=stopped.items[2];
+            stopped.pistons.forEach(b=>sw.set(b.x,b.y,b.z,null)); stopped.release(si); sw.run(30);
+            if (si.pearl.x!==si.home[0] || si.pearl.y!==si.home[1] || si.pearl.z!==1 || !si.pearl.ground || stopped.where(si)==='launched') return false;
+            const L=buildSharedLauncherNav(6), w=L.world, it=L.items[2]; L.release(it);
+            for (let t=0;t<20 && L.where(it)!=='launched';t++) w.tick();
+            const p=it.pearl; let y=p.y,z=p.z,vy=p.vy,vz=p.vz;
+            if (L.where(it)!=='launched') return false;
+            for (let gt=0;gt<2;gt++){ z+=vz; y+=vy; vy*=.99; vz=vz*.99-.03; }
+            w.tick(); return Math.abs(p.y-y)<1e-9 && Math.abs(p.z-z)<1e-9 && Math.abs(p.vy-vy)<1e-9 && Math.abs(p.vz-vz)<1e-9;
+          }) ] },
 ];
 const CATEGORIES = ['Toggles & logic','Clocks & pulses','Signals','Sensors','Reveals','Flying machines','Doors','Navigation'];
 const defaults = e => Object.fromEntries((e.params||[]).map(p => [p.key, p.def]));

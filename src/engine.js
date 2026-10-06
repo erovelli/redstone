@@ -4,7 +4,7 @@ const OPP = { N:'S', S:'N', E:'W', W:'E', U:'D', D:'U' };
 const DL = ['N','E','S','W','U','D'], HL = ['N','E','S','W'];
 const K = (x,y,z) => ((x+512)*1024 + (y+512))*1024 + (z+512);
 const CONDUCT = new Set(['bricks','wallb','stone','obsidian','lamp','barrel','slime','ground','wall']);
-const MOVABLE = new Set(['rblock','wool','bricks','stone','slime','honey','lamp','observer','piston','planks']);
+const MOVABLE = new Set(['rblock','wool','bricks','stone','slime','honey','lamp','observer','piston','planks','noteblock']);
 const STICKY = new Set(['slime','honey']);
 const NONSOLID = new Set(['dust','repeater','comparator','torch','lever','button','plate','sculk']);
 const live = (b, t) => !(b.t==='piston' && b.ext) && !(b.mv && b.mv.t===t);
@@ -50,14 +50,15 @@ class World {
   get(x,y,z){ return this.c.get(K(x,y,z)) || null; }
   set(x,y,z,b){ const k=K(x,y,z); if (b){ b.x=x; b.y=y; b.z=z; this.c.set(k,b); } else this.c.delete(k); }
   put(x,y,z,t,o={}){ const b = Object.assign({ t }, o); if (t==='observer') b.seen = null; if (t==='sculk'){ b.state='idle'; b.out=0; this.sensors.push(b); } if (t==='wool') this.hasWool = true; this.set(x,y,z,b); return b; }
-  // Item entities (Java item physics, per game tick: gravity 0.04, drag 0.98, ground friction 0.6). 2 game ticks per redstone tick.
+  // Items use gravity .04, drag .98 and ground friction .6. Projectile pearls
+  // use position -> drag .99 -> gravity .03 (Java 1.11–1.21.1). Two game ticks per redstone tick.
   spawn(kind, x, y, z, o={}){ const en = Object.assign({ kind, x, y, z, vx:0, vy:0, vz:0, px:x, py:y, pz:z, ground:false }, o); this.entities.push(en); return en; }
   solidAt(x, y, z){ const fx=Math.floor(x), fy=Math.floor(y), fz=Math.floor(z), b = this.get(fx,fy,fz); if (!b) return false;
     if (NONSOLID.has(b.t)) return false; if (b.t==='trapdoor') return !b.open && (z - fz) >= 0.8125; return true; }
   stepEntities(){
     for (const en of this.entities){
       if (en.gone) continue;
-      if (!en.ground) en.vz -= 0.04;
+      if (!en.projectile && !en.ground) en.vz -= 0.04;
       let nz = en.z + en.vz;
       if (en.vz < 0 && this.solidAt(en.x, en.y, nz - 1e-3)){ nz = Math.floor(nz - 1e-3) + 1; en.vz = 0; }
       else if (en.vz > 0 && this.solidAt(en.x, en.y, nz + .25)){ nz = en.z; en.vz = 0; }
@@ -65,7 +66,9 @@ class World {
       const nx = en.x + en.vx; if (this.solidAt(nx, en.y, en.z + .1)) en.vx = 0; else en.x = nx;
       const ny = en.y + en.vy; if (this.solidAt(en.x, ny, en.z + .1)) en.vy = 0; else en.y = ny;
       en.ground = en.vz <= 0 && this.solidAt(en.x, en.y, en.z - 1e-3);
-      const f = en.ground ? .98*.6 : .98; en.vx *= f; en.vy *= f; en.vz *= .98;
+      const drag = en.projectile ? .99 : .98, f = !en.projectile && en.ground ? drag*.6 : drag;
+      en.vx *= f; en.vy *= f; en.vz *= drag;
+      if (en.projectile && !en.ground) en.vz -= .03;
       if (en.z < -40 || Math.abs(en.y) > 200 || Math.abs(en.x) > 200) en.gone = true;
     }
   }
@@ -186,6 +189,10 @@ class World {
     for (const b of list){ this.set(b.x+mv[0], b.y+mv[1], b.z+mv[2], b); b.mv = { d:md, t:this.t }; if (b.t==='observer') b.firePending = true; landed.set(K(b.x,b.y,b.z), b); }
     // blocks moving into an entity carry it along; slime also launches it in the push direction
     for (const en of this.entities){ if (en.gone) continue; const b = landed.get(K(Math.floor(en.x), Math.floor(en.y), Math.floor(en.z+.01))); if (!b) continue;
+      // For drawing: the fraction of the block's 1-block stroke before its leading face reaches the entity (0.25 wide, bottom at z).
+      const a = mv[0] ? 0 : mv[1] ? 1 : 2, s = mv[a], face = [b.x,b.y,b.z][a] + (s > 0 ? 0 : 1), pos = [en.x,en.y,en.z][a];
+      const near = a===2 ? (s > 0 ? pos : pos+.25) : pos - s*.125;
+      en.hit = { t:this.t, at:Math.max(0, Math.min(1, s*(near - face))) };
       en.x += mv[0]; en.y += mv[1]; en.z += mv[2]; en.ground = false;
       if (b.t==='slime'){ if (mv[0]) en.vx = mv[0]; if (mv[1]) en.vy = mv[1]; if (mv[2]) en.vz = mv[2]; } }
   }
@@ -212,6 +219,7 @@ class World {
     const now = this.t;
     const due = this.ev.filter(e => e.t <= now); this.ev = this.ev.filter(e => e.t > now);
     due.forEach(e => e.fn());
+    for (const en of this.entities){ en.px = en.x; en.py = en.y; en.pz = en.z; }
     this.computePower();
     const pistons = [];
     for (const b of [...this.c.values()]){
@@ -236,7 +244,6 @@ class World {
       if (b.seen === null){ b.seen = s; continue; }
       if (b.firePending || s !== b.seen){ b.firePending = false; b.seen = s; if (!b.busy){ b.busy = true; this.at(now+1, () => { b.on = true; }); this.at(now+2, () => { b.on = false; b.busy = false; }); } }
     }
-    for (const en of this.entities){ en.px = en.x; en.py = en.y; en.pz = en.z; }
     this.stepEntities(); this.stepEntities();
     this.t++;
     if (this.vibs.length) this.vibs = this.vibs.filter(v => v.t1 >= this.t-2);
