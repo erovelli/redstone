@@ -15,6 +15,7 @@ const until = (w, f, max=200) => { for (let i=0;i<max;i++){ if (f()) return i; w
 const first = (w, f, max=200) => { for (let i=1;i<=max;i++){ w.tick(); if (f()) return i; } return -1; };   // ticks until f() holds, counting the first tick as 1
 const snapIn = (w, f) => [...w.c.values()].filter(f).map(b=>b.t+(b.ext?'E':'')+[b.x,b.y,b.z]).sort().join(';');
 const T = (name, fn) => ({ name, fn });
+const require_engine = () => RS;
 const doorArea = (G) => { const w=G.world; let n=0; for (let x=0;x<G.W;x++) for (const y of [1,2]) for (let z=0;z<2*G.L;z++) if (w.get(x,y,z)) n++; return n; };
 const hiddenClear = (H) => { for (const x of [0,1]) for (let y=0;y<=5;y++) for (const z of [0,1]) if (H.world.get(x,y,z)) return false; return true; };
 const truth = (build, want) => [[0,0],[1,0],[0,1],[1,1]].every(([a,b],i) => { const c=build(), w=c.world; w.run(5); c.io.a.on=!!a; c.io.b.on=!!b; w.run(20); return !!c.io.lamp.lit === !!want[i]; });
@@ -263,11 +264,11 @@ const entries = [
             }
             return true;
           }),
-          T('every barrel hides its pistons, slime and redstone blocks inside a flush wall', () => [1,2,3,4,5,6].every(n => {
+          T('every stasis chamber hides its pistons, slime and redstone blocks inside a flush wall', () => [1,2,3,4,5,6].every(n => {
             const L=buildHiddenLauncherNav(n), w=L.world, ps=[...w.c.values()].filter(b=>b.t==='piston');
-            if (ps.length!==2*n || !L.ready() || [...w.c.values()].some(b=>b.station)) return false;
-            for (let x=0;x<L.cols;x++) for (let z=-5;z<=1;z++){ const b=w.get(x,0,z); if (!b || !['noteblock','jukebox','barrel'].includes(b.t) || w.get(x,1,z)) return false; }
-            return L.items.every(it=>it.barrel.t==='barrel' && it.barrel.y===0 && !it.barrel.open && !it.pearl.visible && it.pistons.every(p=>p.s && p.y===-2) && it.pistons[0].d==='U' && it.pistons[1].d==='E'
+            if (ps.length!==3*n || !L.ready()) return false;   // up, side and the soul sand piston
+            for (let x=0;x<L.cols;x++) for (let z=-5;z<=2;z++){ const b=w.get(x,0,z), f=w.get(x,1,z); if (!b || !['noteblock','jukebox','dispenser','head'].includes(b.t) || (f && !['button','water','soulsand'].includes(f.t))) return false; }
+            return L.items.every(it=>it.dispenser.t==='dispenser' && it.dispenser.d==='S' && !it.dispenser.full && w.get(it.xc,1,0).t==='water' && it.soul.y===1 && it.soul.z===-1 && it.soulPiston.ext && it.pearl.stasis!==false && it.button.t==='button' && it.button.z===1 && !it.button.on && !it.pearl.visible && it.pistons.every(p=>p.s && p.y===-2) && it.pistons[0].d==='U' && it.pistons[1].d==='E'
               && [it.lower,it.upper].every(b=>b.t==='slime' && b.y===-2) && it.reds.every((r,k)=>r.t==='rblock' && r.y===-4 && r.x===it.pistons[k].x && r.z===it.pistons[k].z)
               && it.covers.length===4 && it.covers.every(c=>c.y===0 && c.t==='noteblock' && !w.get(c.x,-1,c.z)));
           })),
@@ -292,29 +293,30 @@ const entries = [
             w.tick(); if (!it.covers.every(c=>c.y===-1) || [it.lower,it.upper].some(b=>b.y!==-2)) return false;
             w.tick(); w.tick(); const g=Object.fromEntries(it.coverGroups.map(g=>[g.name,g.blocks]));
             if (!g.side.every((c,k)=>c.y===-1 && c.x===[it.xc-1,it.xc-2][k] && c.z===-2) || !g.up.every((c,k)=>c.y===-1 && c.x===it.xc-2 && c.z===[-3,-4][k])) return false;
-            for (const y of [-1,0,1]){ w.tick(); if (![...it.pistons,it.lower,it.upper].every(b=>b.y===y)) return false; if (it.pearl.visible || it.barrel.open) return false; }
-            w.tick(); if (it.phase!=='dropping' || !it.barrel.open || !it.pearl.visible || it.pearl.y!==1.5) return false;
+            for (const y of [-1,0,1]){ w.tick(); if (![...it.pistons,it.lower,it.upper].every(b=>b.y===y)) return false; if (it.pearl.visible || it.dispenser.full) return false; }
+            w.tick(); if (it.phase!=='releasing' || !it.pearl.visible || it.soul.y!==0 || it.dispenser.full) return false;
+            w.tick(); if (it.phase!=='dropping' || !it.dispenser.full || w.get(it.xc,1,0) || it.pearl.y!==1.5) return false;
             const J=buildHiddenLauncherNav(1), j=J.items[0], jw=J.world;
             jw.put(j.xc-2,-1,-3,'wallb'); J.release(j); jw.run(20);
-            return j.phase==='receding' && !j.pearl.visible && !j.barrel.open && [j.lower,j.upper].every(b=>b.y===-2) && !J.ready(j);
+            return j.phase==='receding' && !j.pearl.visible && !j.dispenser.full && j.soul.y===1 && [j.lower,j.upper].every(b=>b.y===-2) && !J.ready(j);
           }),
-          T('each barrel drops its pearl straight down, then launches it up and to the east', () => {
+          T('each stasis chamber releases its pearl straight down, then launches it up and to the east', () => {
             for (const n of [1,2,3,4,5,6]) for (let i=0;i<n;i++){
               const L=buildHiddenLauncherNav(n), w=L.world, it=L.items[i]; w.run(4); if (!L.release(it)) return false;
               let dropped=false, landed=false, up=false, east=false;
               for (let t=0;t<40;t++){
                 w.tick(); const p=it.pearl;
-                if (it.phase==='dropping' && p.z<it.mouth[2]){ if (p.x!==it.mouth[0] || p.y!==it.mouth[1] || p.vx!==0 || p.vy!==0) return false; dropped=true; }
+                if (it.phase==='dropping' && p.z<it.home[2]){ if (p.x!==it.home[0] || p.y!==it.home[1] || p.vx!==0 || p.vy!==0) return false; dropped=true; }
                 if (p.ground && p.z===it.zRest) landed=true;
                 if (it.pistons[0].ext && !it.pistons[1].ext && p.vz>0 && p.vx===0) up=true;
                 if (it.launched && p.vx>.05 && p.vz>.05 && p.y===1.5) east=true;
-                if (L.items.some(o=>o!==it && (o.phase!=='closed' || o.pearl.visible || o.barrel.open || o.covers.some(c=>c.y!==0) || o.pistons.some(p=>p.ext || p.y!==-2)))) return false;
+                if (L.items.some(o=>o!==it && (o.phase!=='closed' || o.pearl.visible || o.dispenser.full || !o.pearl.stasis || o.covers.some(c=>c.y!==0) || o.pistons.some(p=>p.ext || p.y!==-2)))) return false;
               }
               if (!dropped || !landed || !up || !east || !L.ready(it)) return false;
             }
             return true;
           }),
-          T('a moving slime block only ever touches jukeboxes, the barrel or its own machine, so it drags nothing', () => {
+          T('a moving slime block only ever touches jukeboxes, the dispenser or its own machine, so it drags nothing', () => {
             const D=[[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]];
             const L=buildHiddenLauncherNav(6), w=L.world; w.run(4); let moves=0;
             for (const it of L.items){
@@ -329,7 +331,8 @@ const entries = [
                   if (sl.x===at[0] && sl.y===at[1] && sl.z===at[2]) continue; moves++;
                   for (const b of nb){
                     const own = b===pusher || (b.t==='head' && b.p===pusher) || (!launch && carriage.includes(b));
-                    if (!own && b.t!=='jukebox' && b.t!=='barrel') return false;
+                    // buttons are attachments: slime never pulls them
+                    if (!own && !['jukebox','dispenser','button','water'].includes(b.t)) return false;
                   }
                 }
               }
@@ -337,7 +340,7 @@ const entries = [
             }
             return moves===6*2*8;
           }),
-          T('the note-block covers play a rising chord as a launcher opens and a falling one as it closes, in each barrel\'s own key', () => {
+          T('the note-block covers play a rising chord as a launcher opens and a falling one as it closes, in each chamber\'s own key', () => {
             const L=buildHiddenLauncherNav(6), w=L.world; w.run(4); const keys=new Set();
             for (const it of L.items){
               const from=L.notes.length; L.release(it); for (let t=0;t<45;t++) w.tick();
@@ -348,6 +351,30 @@ const entries = [
               keys.add(ps[0]); L.restock(it);
             }
             return keys.size===6;
+          }),
+          T('the button releases the pearl from stasis: soul sand pulled in, water scooped up by the dispenser, then refilled after', () => {
+            const L=buildHiddenLauncherNav(2), w=L.world, it=L.items[0], p=it.pearl; w.run(30);
+            const held=()=>p.stasis && p.x===it.home[0] && p.y===it.home[1] && p.z===it.home[2] && !p.visible;
+            if (!held() || it.button.on) return false;
+            L.release(it); let pressed=0, order=[];
+            for (let t=0;t<60;t++){
+              const before={ soul:it.soul.y, water:!!w.get(it.xc,1,0) && w.get(it.xc,1,0).t==='water', full:it.dispenser.full };
+              w.tick(); if (it.button.on) pressed++;
+              if (before.soul===1 && it.soul.y===0) order.push('soul in');
+              if (before.water && !(w.get(it.xc,1,0) && w.get(it.xc,1,0).t==='water')) order.push('scooped');
+              if (before.soul===0 && it.soul.y===1) order.push('soul out');
+              if (!before.water && w.get(it.xc,1,0) && w.get(it.xc,1,0).t==='water') order.push('poured');
+              if (!it.launched && !['releasing','dropping','launching'].includes(it.phase) && !held()) return false;   // held until release
+            }
+            const kinds=L.sounds.map(s=>s.kind).join(',');
+            return pressed===10 && order.join(',')==='soul in,scooped,soul out,poured' && kinds==='fill,empty' && it.launched && L.ready(it) && L.restock(it) && (w.tick(), held());
+          }),
+          T('a pearl in water slows by 0.8 per game tick, and the bubble column over soul sand holds it still', () => {
+            const RSx=require_engine(), w=new RSx.World();
+            w.put(0,0,0,'soulsand'); w.put(0,0,1,'water'); w.put(3,0,1,'water');
+            const a=w.spawn('pearl',.5,.5,1.3,{projectile:true}), b=w.spawn('pearl',3.2,.5,1.3,{projectile:true,vx:.05});
+            w.tick(); w.tick();
+            return a.stasis && a.z===1.3 && a.vx===0 && !b.stasis && Math.abs(b.vx-.05*.8**4)<1e-9;
           }),
           T('the two slime blocks never touch, so neither piston can drag the other slime', () => {
             const apart = it => Math.abs(it.lower.x-it.upper.x)+Math.abs(it.lower.y-it.upper.y)+Math.abs(it.lower.z-it.upper.z) > 1;
@@ -366,11 +393,11 @@ const entries = [
             for (let t=0;t<4;t++){ w.tick(); if (p.vx===0 || p.y!==1.5) blocked=true; }
             return it.launched && !blocked && p.z>8 && p.x-x0>6;
           }),
-          T('every barrel withdraws, closes flush, and can be reused twice', () => {
+          T('every chamber withdraws, closes flush, refills, and can be reused twice', () => {
             const L=buildHiddenLauncherNav(6), w=L.world; w.run(4); const s0=snapIn(w,()=>true);
             for (let cycle=0;cycle<2;cycle++) for (const it of L.items){
               if (!L.release(it) || L.release(L.items[(it.i+1)%6]) || L.restock(it)) return false;
-              for (let t=0;t<40;t++){ w.tick(); if (it.phase==='withdrawing' && (it.pistons.some(p=>p.ext) || it.barrel.open || L.ready(it) || L.restock(it))) return false; }
+              for (let t=0;t<40;t++){ w.tick(); if (it.phase==='withdrawing' && (it.pistons.some(p=>p.ext) || L.ready(it) || L.restock(it))) return false; }
               if (!it.launched || !L.ready(it) || snapIn(w,()=>true)!==s0 || !L.restock(it) || it.pearl.visible || it.launched) return false;
               if ([it.pearl.x,it.pearl.y,it.pearl.z].some((v,k)=>v!==it.home[k])) return false;
             }
@@ -379,13 +406,13 @@ const entries = [
           T('hidden launchers need real piston contact and preserve projectile gravity and drag', () => {
             const stopped=buildHiddenLauncherNav(6), sw=stopped.world, si=stopped.items[2];
             stopped.release(si); for (let t=0;t<12 && si.phase!=='dropping';t++) sw.tick(); si.pistons.forEach(b=>sw.set(b.x,b.y,b.z,null)); sw.run(30);
-            if (si.pearl.x!==si.mouth[0] || si.pearl.y!==si.mouth[1] || si.pearl.z!==si.zRest || !si.pearl.ground || si.launched) return false;
+            if (si.pearl.x!==si.home[0] || si.pearl.y!==si.home[1] || si.pearl.z!==si.zRest || !si.pearl.ground || si.launched) return false;
             const L=buildHiddenLauncherNav(6), w=L.world, it=L.items[2]; L.release(it);
             for (let t=0;t<40 && !it.launched;t++) w.tick();
             const p=it.pearl; let x=p.x,z=p.z,vx=p.vx,vz=p.vz;
             if (!it.launched) return false;
             for (let gt=0;gt<2;gt++){ x+=vx; z+=vz; vx*=.99; vz=vz*.99-.03; }
-            w.tick(); return Math.abs(p.x-x)<1e-9 && Math.abs(p.z-z)<1e-9 && Math.abs(p.vx-vx)<1e-9 && Math.abs(p.vz-vz)<1e-9 && p.y===it.mouth[1] && p.vy===0;
+            w.tick(); return Math.abs(p.x-x)<1e-9 && Math.abs(p.z-z)<1e-9 && Math.abs(p.vx-vx)<1e-9 && Math.abs(p.vz-vz)<1e-9 && p.y===it.home[1] && p.vy===0;
           }),
           T('nav motion needs real pistons and flight follows gravity and drag', () => {
             const stopped=buildSharedLauncherNav(6), sw=stopped.world, si=stopped.items[2];

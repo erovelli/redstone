@@ -20,10 +20,10 @@ tv.persistent = true; R.hitAt(tv, 0,0,0, 'Light switch lever', () => { th.io.lev
 /* main nav: ender pearl launcher */
 const NAV = [['Overview','#/'],['Logic','#/category/toggles-and-logic'],['Flying','#/category/flying-machines'],['Doors','#/category/doors'],['Tests','#/tests'],['Rules','#/rules']];
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const launchHint = 'Choose a barrel to launch and teleport.';
+const launchHint = 'Press a button to launch and teleport.';
 const nav = { L:null, view:null, pads:[], busy:null };
-// The wall shows the label, barrel and one stone row; it grows to the launcher's full depth while one is in use.
-const OPEN_PHASES = ['revealing','receding','opening','dropping','launching','flying','withdrawing'];
+// The wall shows the label, button, chamber and one row below; it grows to the launcher's full depth while one is in use.
+const OPEN_PHASES = ['revealing','receding','opening','releasing','dropping','launching','flying','withdrawing','refilling'];
 function syncNav(){
   const b = nav.busy, it = b && nav.L.items[b.i];
   $('#launch-stage').classList.toggle('open', !!(it && OPEN_PHASES.includes(it.phase)));
@@ -45,20 +45,42 @@ function noteBlock(pitch){
     }
   } catch(e){}
 }
+// Dispenser bucket sounds: scooping water up ('fill', a falling glug) and pouring it back ('empty', a rising splash).
+function bucketSound(kind){
+  if (reduceMotion) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const t = audio.currentTime, len = kind==='fill' ? .38 : .5, fill = kind==='fill';
+    const buf = audio.createBuffer(1, Math.ceil(audio.sampleRate*len), audio.sampleRate), d = buf.getChannelData(0);
+    for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+    const src = audio.createBufferSource(); src.buffer = buf;
+    const band = audio.createBiquadFilter(); band.type = 'bandpass'; band.Q.value = fill ? 6 : 2.5;
+    band.frequency.setValueAtTime(fill ? 1400 : 500, t); band.frequency.exponentialRampToValueAtTime(fill ? 350 : 1900, t+len);
+    const g = audio.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(fill ? .5 : .35, t+.03); g.gain.exponentialRampToValueAtTime(.001, t+len);
+    src.connect(band); band.connect(g); g.connect(audio.destination); src.start(t); src.stop(t+len);
+    // a couple of bubbly blips on top of the water noise
+    for (const [at, f0, f1] of fill ? [[0,700,300],[.12,600,250]] : [[.05,220,520],[.2,260,640]]){
+      const o = audio.createOscillator(), og = audio.createGain(); o.type = 'sine';
+      o.frequency.setValueAtTime(f0, t+at); o.frequency.exponentialRampToValueAtTime(f1, t+at+.09);
+      og.gain.setValueAtTime(.0001, t+at); og.gain.linearRampToValueAtTime(.12, t+at+.01); og.gain.exponentialRampToValueAtTime(.0005, t+at+.1);
+      o.connect(og); og.connect(audio.destination); o.start(t+at); o.stop(t+at+.12);
+    }
+  } catch(e){}
+}
 function buildNav(){
   const st = $('#launch-stage'); st.innerHTML = ''; if (nav.view) R.removeView(nav.view);
   const L = nav.L || (nav.L = buildHiddenLauncherNav(NAV.length)); if (!L.warm){ L.world.run(4); L.warm = true; }
   const B = navScale(L);
-  const v = nav.view = R.makeNavView(st, L, { B, overlay:$('#pearl-sky'), onNote:n => noteBlock(n.pitch) });
+  const v = nav.view = R.makeNavView(st, L, { B, overlay:$('#pearl-sky'), onNote:n => noteBlock(n.pitch), onSound:s => bucketSound(s.kind) });
   v.persistent = true;
-  // Closed, the wall shows its top lip, the labels, the barrels with the side launcher's covers, and one row below; open, the launcher rows too.
+  // Closed, the wall shows its top lip, the labels, the buttons, the chambers with the side launcher's covers, and one row below; open, the launcher rows too.
   const below = v.front(0, 0, -2).y;
   st.style.width = v.W+'px'; st.style.setProperty('--closed', below+'px'); st.style.setProperty('--open', v.H+'px'); st.style.setProperty('--b', B+'px');
   nav.pads = NAV.map(([label,href],i) => {
-    const it = L.items[i], c = v.front(it.xc-1, 0, 1);
+    const it = L.items[i], c = v.front(it.xc-1, 0, 2);
     const a = document.createElement('a'); a.className = 'pad'; a.href = href; a.dataset.i = i;
-    Object.assign(a.style, { left:c.x+'px', top:c.y+'px', width:3*B+'px', height:2*B+'px' });
-    a.innerHTML = `<span>${label}</span>`; a.setAttribute('aria-label', `${label} (opens the barrel and its hidden pearl launcher)`);
+    Object.assign(a.style, { left:c.x+'px', top:c.y+'px', width:3*B+'px', height:3*B+'px' });
+    a.innerHTML = `<span>${label}</span>`; a.setAttribute('aria-label', `${label} (presses the button on its ender pearl stasis chamber and launches the pearl)`);
     st.appendChild(a); return a;
   });
   if (nav.busy){ nav.pads.forEach(p=>p.setAttribute('aria-disabled','true')); nav.pads[nav.busy.i].classList.add('launching'); }
@@ -80,7 +102,7 @@ function watchLaunch(){
   syncNav();
   if (b.cancelled || b.landed){ if (L.ready(it)) finishLaunch(b); return; }
   const phase = L.where(it), p = it.pearl;
-  const hint = ['revealing','receding','opening'].includes(phase) ? `Opening the ${name} launcher…` : phase==='launched' ? `${name}: pearl in flight…` : phase==='launching' ? `Launching ${name}…` : `${name}: dropping onto the slime launcher…`;
+  const hint = ['revealing','receding','opening'].includes(phase) ? `Opening the ${name} launcher…` : phase==='releasing' ? `${name}: draining the stasis chamber…` : phase==='launched' ? `${name}: pearl in flight…` : phase==='launching' ? `Launching ${name}…` : `${name}: dropping onto the slime launcher…`;
   if ($('#launch-hint').textContent!==hint) $('#launch-hint').textContent = hint;
   // The pearl lands once its whole sprite has left the viewport.
   const q = view.screenOf(p);

@@ -94,12 +94,16 @@ function buildSharedLauncherNav(n){
   const where = it => it.launched ? 'launched' : active && active.it === it ? active.phase : 'in the box';
   return {world:w,items,pistons:[up,side],lower,upper,centre,release,restock,ready,where,box:[0,2*n,-1,3,-1,6]};
 }
-// The site's navigation: a flush note-block wall with one barrel per destination, all
-// at real block scale. Coordinates: wall face cells at y=0 (front face at y=1),
-// open air in front at y=1, the wall interior at y=-1..-3; barrels at z=0, the
-// label row at z=1 and the lower launcher rows down to z=-5. Each unit is 3
-// columns wide: two columns for the side launcher, in line with the barrel,
-// then the barrel at xc.
+// The site's navigation: a flush note-block wall with one ender pearl stasis chamber
+// per destination, all at real block scale. Coordinates: wall face cells at y=0 (front
+// face at y=1), open air in front at y=1, the wall interior at y=-1..-3. Each chamber is
+// a water block in front of the wall (xc,1,0), right above the pearl's drop column, on
+// soul sand (xc,1,-1): an upward bubble column that holds the pearl in stasis. The soul
+// sand is held out by a sticky piston in the wall behind it, and a dispenser with a
+// bucket sits in the wall directly behind the water (xc,0,0). A stone button is above the
+// chamber at z=1; labels are at z=2; the lower launcher rows go down to z=-5. Each unit is 3
+// columns wide: two columns for the side launcher, in line with the chamber,
+// then the chamber at xc.
 //   Stored: sticky pistons and slime wait 2 blocks inside the wall (y=-2) behind
 //   note-block covers, with an empty cell (y=-1) between them. A redstone block waits
 //   2 cells behind each launch piston (y=-4), so it never powers it on the way out.
@@ -107,18 +111,19 @@ function buildSharedLauncherNav(n){
 //   into pockets, playing a note-block chord as they go, and a hidden carriage pushes the pistons and slime 3 blocks
 //   forward, so they stand 1 block proud of the wall (y=1). The redstone blocks
 //   follow, still 2 cells behind (y=-1).
-//   Launch: the barrel opens and the pearl drops 2.375 blocks onto the slime
-//   block 3 below the barrel. A redstone block moves up behind the upward piston
+//   Launch: pressing the button releases the pearl: the soul sand is pulled into
+//   the wall, the dispenser scoops up the water, and the pearl drops 2.375 blocks
+//   onto the slime block 3 below the chamber. A redstone block moves up behind the upward piston
 //   (y=0, the cell it came out through) and powers it; one tick later the same
-//   happens behind the side piston (in line with the barrel, left of the column,
-//   facing east), which strikes the rising pearl in front of the barrel, sending
+//   happens behind the side piston (in line with the chamber, left of the column,
+//   facing east), which strikes the rising pearl in front of the chamber, sending
 //   it up and to the right. The redstone blocks then move back and both pistons
 //   retract. Only the open parts of an extended piston show its redstone block.
 //   The two slime blocks are never face to face: slime sticks to slime, so if
 //   they touched, one piston would drag the other's slime and break the launcher.
 //   With both extended, one row of air still separates them. That fixes the
-//   lower slime 3 below the barrel: any higher and it would meet the side slime,
-//   and the pearl only reaches the barrel row one tick after the up push from there.
+//   lower slime 3 below the chamber: any higher and it would meet the side slime,
+//   and the pearl only reaches the chamber row one tick after the up push from there.
 // Slime drags every movable block it touches. The wall is note blocks (movable, so they
 // can be covers), and every wall block a slime block touches is a jukebox, which looks
 // nearly the same but cannot be moved by pistons, so slime slides past it. Parked
@@ -127,10 +132,10 @@ function buildSharedLauncherNav(n){
 // for a hidden extender (a covered recess needs 3 blocks of travel, past a single
 // piston's reach). The launch is real redstone block, piston and slime contact.
 function buildHiddenLauncherNav(n){
-  if (!Number.isInteger(n) || n<1 || n>6) throw new Error('Expected 1 to 6 navigation barrels');
+  if (!Number.isInteger(n) || n<1 || n>6) throw new Error('Expected 1 to 6 navigation chambers');
   const RSx = typeof module!=='undefined' ? require('../engine.js') : window.RS;
   const w = new RSx.World(), items=[];
-  const X1=3*n+1, Z0=-5, Z1=1, zRest=-2;
+  const X1=3*n+1, Z0=-5, Z1=2, zRest=-2;
   const xcs=[...Array(n)].map((_,i)=>3*i+2);
   // Covers: the note blocks in front of the stored machine. Each is pulled back one block, then two cells aside
   // inside the wall, where no slime block touches it.
@@ -157,14 +162,23 @@ function buildHiddenLauncherNav(n){
   }
   for (let i=0;i<n;i++){
     const xc=xcs[i];
-    const barrel=w.put(xc,0,0,'barrel',{d:'S',open:false});
+    // Stasis chamber: water on soul sand in front of the wall; the soul sand is held out by an extended sticky piston
+    // (powered through a buried link from a lever that is on while the chamber holds), and a dispenser with an empty
+    // bucket faces the water from inside the wall.
+    const dispenser=w.put(xc,0,0,'dispenser',{d:'S',full:false});
+    w.put(xc,1,0,'water'); const soul=w.put(xc,1,-1,'soulsand');
+    const soulPiston=w.put(xc,-1,-1,'piston',{d:'S',s:true,ext:true}); w.put(xc,0,-1,'head',{d:'S',s:true,p:soulPiston});
+    w.put(xc,-2,-1,'obsidian',{station:true,buried:true});
+    const hold=w.put(xc,-8,0,'lever',{on:true,att:'U',buried:true}); w.put(xc,-8,1,'obsidian',{station:true,buried:true});
+    w.floor.push({feed:[xc,-8,1],cells:[[xc,-2,-1]]});
+    const button=w.put(xc,1,1,'button',{on:false,att:'N'});   // on the wall face above the chamber
     const up=w.put(xc,-2,-4,'piston',{d:'U',s:true}), lower=w.put(xc,-2,-3,'slime');
     const side=w.put(xc-2,-2,0,'piston',{d:'E',s:true}), upper=w.put(xc-1,-2,0,'slime');
     const coverGroups=groups(xc).map(g=>({ ...g, blocks:g.cells.map(([x,z])=>w.get(x,0,z)) }));
     const reds=[w.put(xc,-4,-4,'rblock'), w.put(xc-2,-4,0,'rblock')];   // behind the up and side pistons
-    const home=[xc+.5,.5,.375], mouth=[xc+.5,1.5,.375];
+    const home=[xc+.5,1.5,.375];   // in the water, held by the bubble column
     const pearl=w.spawn('pearl',...home,{ground:true,item:i,projectile:true,visible:false});
-    items.push({i,xc,x0:xc-2,barrel,pearl,home,mouth,pistons:[up,side],reds,lower,upper,coverGroups,covers:coverGroups.flatMap(g=>g.blocks),phase:'closed',zRest,box:[xc-2,xc+1,-3,1,Z0,Z1]});
+    items.push({i,xc,x0:xc-2,dispenser,soul,soulPiston,hold,button,pearl,home,pistons:[up,side],reds,lower,upper,coverGroups,covers:coverGroups.flatMap(g=>g.blocks),phase:'closed',zRest,box:[xc-2,xc+1,-3,1,Z0,Z1]});
   }
   // Every position a slime block starts a move from: on its way out and back, and both ends of its launch stroke.
   const slimeStarts = it => [...[-2,-1,0,1].map(y=>[it.xc,y,-3]), [it.xc,1,-2], ...[-2,-1,0,1].map(y=>[it.xc-1,y,0]), [it.xc,1,0]];
@@ -178,7 +192,7 @@ function buildHiddenLauncherNav(n){
   const coverStep=k=>it=>it.coverGroups.map(g=>[g.blocks,g.moves[k]]), coverBack=k=>it=>it.coverGroups.map(g=>[g.blocks,RSx.OPP[g.moves[k]]]);
   const out=it=>[[carriage(it),'S']], in_=it=>[[carriage(it),'N']];
   // Every cover step powers its note blocks: a rising chord as a launcher opens, a falling one as it closes.
-  // Pitches are note-block clicks, 0 to 24 (F#3 to F#5); each barrel has its own key.
+  // Pitches are note-block clicks, 0 to 24 (F#3 to F#5); each chamber has its own key.
   const ROOTS=[6,8,10,11,13,15], CHORD=[0,4,7], notes=[];
   const sound=(k,rising)=>it=>{ const pitch=ROOTS[it.i%ROOTS.length]+CHORD[rising ? k : 2-k];
     it.covers.forEach((b,k)=>notes.push({ t:w.t, i:it.i, pitch, x:b.x, y:b.y, z:b.z, ...(k ? { k } : {}) })); };   // k marks the extra blocks of one chord step
@@ -192,9 +206,20 @@ function buildHiddenLauncherNav(n){
   };
   const at=(b,x,y,z)=>b.x===x && b.y===y && b.z===z;
   const deployed = it => !it.pistons.some(p=>p.ext) && at(it.pistons[0],it.xc,1,-4) && at(it.lower,it.xc,1,-3) && at(it.pistons[1],it.xc-2,1,0) && at(it.upper,it.xc-1,1,0) && it.reds.every(r=>r.y===-1);
-  const stored = it => !it.pistons.some(p=>p.ext) && [...it.pistons,it.lower,it.upper].every(b=>b.y===-2) && it.reds.every(r=>r.y===-4) && it.covers.every(b=>b.y===0) && !it.barrel.open;
+  const stored = it => !it.pistons.some(p=>p.ext) && [...it.pistons,it.lower,it.upper].every(b=>b.y===-2) && it.reds.every(r=>r.y===-4) && it.covers.every(b=>b.y===0) && chamberSet(it);
   // Firing a launch piston: its redstone block moves forward into the cell right behind it, which powers it this tick.
   const signal = (it, k, on) => tryMove([[[it.reds[k]], on ? 'S' : 'N']]);
+  // The chamber is set when the water stands on the pushed-out soul sand and the dispenser's bucket is empty.
+  const water = it => { const b=w.get(it.xc,1,0); return !!b && b.t==='water'; };
+  const chamberSet = it => water(it) && at(it.soul,it.xc,1,-1) && it.soulPiston.ext && !it.dispenser.full;
+  // The dispenser fires its bucket: an empty bucket scoops up the water in front of it, a full one pours it back.
+  const sounds=[];
+  const bucket = (it, scoop) => {
+    if (scoop ? !water(it) || it.dispenser.full : water(it) || !it.dispenser.full || w.get(it.xc,1,0)) return false;
+    if (scoop) w.set(it.xc,1,0,null); else w.put(it.xc,1,0,'water');
+    it.dispenser.full = scoop; sounds.push({ t:w.t, i:it.i, kind: scoop ? 'fill' : 'empty' });
+    return true;
+  };
   const ready = it => (it ? [it] : items).every(it=>stored(it) && it.phase==='closed');
   let active=null;
   const restock = it => {
@@ -208,6 +233,7 @@ function buildHiddenLauncherNav(n){
   const release = it => {
     if (!items.includes(it) || active || !ready(it)) return false;
     restock(it); it.phase='revealing'; active={it,at:w.t,step:0};
+    it.button.on=true; w.at(w.t+10,()=>{ it.button.on=false; });   // a stone button stays pressed for 10 ticks
     return true;
   };
   // The controller runs at the start of each tick, so its block moves and drive changes belong to that tick.
@@ -217,23 +243,29 @@ function buildHiddenLauncherNav(n){
     if (it.phase==='receding'){
       if (tryMove(OPEN[a.step](it)) && ++a.step===OPEN.length) it.phase='opening';
     } else if (it.phase==='opening' && deployed(it)){
-      it.phase='dropping'; it.barrel.open=true;
-      Object.assign(p,{x:it.mouth[0],y:it.mouth[1],z:it.mouth[2],px:it.mouth[0],py:it.mouth[1],pz:it.mouth[2],ground:false,visible:true});
+      // Release: the piston pulls the soul sand into the wall (the bubble column stops and the pearl starts to sink),
+      // then the dispenser scoops the water up with its bucket and the pearl falls down the drop column.
+      it.phase='releasing'; it.hold.on=false; p.visible=true; a.at=w.t;
+    } else if (it.phase==='releasing'){
+      if (w.t-a.at>=1 && bucket(it,true)) it.phase='dropping';
     } else if (it.phase==='dropping' && p.ground && p.z===it.zRest){
       it.phase='launching'; signal(it,0,true); a.sideAt=w.t+1;
     } else if (it.phase==='launching'){
       if (w.t===a.sideAt) signal(it,1,true);
-      if (p.vx>.05 && p.vz>.05){ it.launched=true; it.phase='flying'; it.barrel.open=false; a.offAt=w.t+2; }
+      if (p.vx>.05 && p.vz>.05){ it.launched=true; it.phase='flying'; a.offAt=w.t+2; }
     } else if (it.phase==='flying'){
       if (w.t===a.offAt){ signal(it,0,false); signal(it,1,false); }
       if (w.t>a.offAt+1 && deployed(it)){ it.phase='withdrawing'; a.step=0; }
     } else if (it.phase==='withdrawing'){
-      if (tryMove(CLOSE[a.step](it)) && ++a.step===CLOSE.length){ it.phase='concealing'; a.at=w.t; }
+      // Once everything is back in the wall, the piston pushes the soul sand back out, then the dispenser pours the water.
+      if (tryMove(CLOSE[a.step](it)) && ++a.step===CLOSE.length){ it.phase='refilling'; it.hold.on=true; a.at=w.t; }
+    } else if (it.phase==='refilling'){
+      if (w.t-a.at>=2 && it.soulPiston.ext && at(it.soul,it.xc,1,-1) && bucket(it,false)){ it.phase='concealing'; a.at=w.t; }
     } else if (it.phase==='concealing' && w.t-a.at>=2) it.phase='closed';
   };
   const tick=w.tick.bind(w);
   w.tick=()=>{ if (active) control(); tick(); };
   const where = it => it.launched ? 'launched' : it.phase;
-  return {world:w,items,release,restock,ready,where,notes,cols:X1+1,rows:Z1-Z0+1,box:[0,X1,-4,1,Z0,Z1]};
+  return {world:w,items,release,restock,ready,where,notes,sounds,cols:X1+1,rows:Z1-Z0+1,box:[0,X1,-4,1,Z0,Z1]};
 }
 if (typeof module!=='undefined') module.exports = { buildLauncherNav, buildSharedLauncherNav, buildHiddenLauncherNav };

@@ -38,6 +38,7 @@ function cubeArt(b, face){
     case 'ground': { const f = hex(pal.floor||'#cfc8b8'); return face==='top' ? art('gT'+pal.floor, R => { R(0,0,8,8,pal.floor); R(0,0,8,.5,pal.line); R(0,0,.5,8,pal.line); }) : art('gF'+pal.floor, R => { R(0,0,8,8,mix(f,[0,0,0],.38)); R(0,0,8,1,mix(f,[0,0,0],.18)); R(2,3,1,1,mix(f,[0,0,0],.5)); R(5,5,1,1,mix(f,[0,0,0],.5)); }); }
     case 'rblock': return art('rblock', R => { R(0,0,8,8,'#b0170c'); R(0,0,8,.5,'#e0402c'); R(0,0,.5,8,'#e0402c'); R(0,7.5,8,.5,'#6e0c05'); R(7.5,0,.5,8,'#6e0c05'); R(1.5,1.5,2,2,'#ff5a3c'); R(4.5,4.5,2,2,'#ff5a3c'); R(4.5,1.5,2,2,'#7c0f07'); R(1.5,4.5,2,2,'#7c0f07'); });
     case 'planks': return art('planks', R => { R(0,0,8,8,'#a4783f'); R(0,1.75,8,.25,'#6e4c24'); R(0,3.75,8,.25,'#6e4c24'); R(0,5.75,8,.25,'#6e4c24'); R(0,7.75,8,.25,'#6e4c24'); R(3,0,.25,1.75,'#6e4c24'); R(6,2,.25,1.75,'#6e4c24'); R(1.5,4,.25,1.75,'#6e4c24'); R(5,6,.25,1.75,'#6e4c24'); });
+    case 'soulsand': return art('soulsand', R => { R(0,0,8,8,'#51402f'); R(0,0,8,.5,'#5f4c39'); [[1,1],[4.5,1.5],[2,4.5],[5.5,5]].forEach(([x,y]) => { R(x,y,2,1.5,'#3a2c20'); R(x+.5,y+.5,.5,.5,'#2a1f16'); R(x+1.5,y+.5,.5,.5,'#2a1f16'); }); R(0,7.5,8,.5,'#3a2c20'); });
     // Note block and jukebox: the same dark wood. The jukebox side has a slightly darker band, and its top a disc slot.
     case 'noteblock': return art('noteB', R => { R(0,0,8,8,'#6b4530'); R(0,0,8,.5,'#5a3826'); R(0,0,.5,8,'#5a3826'); R(0,7.5,8,.5,'#3f2619'); R(7.5,0,.5,8,'#3f2619');
         [[1,1.5],[4.5,1],[2.5,4],[6,3.5],[1,6],[4.5,6]].forEach(([x,y]) => { R(x,y,2,.5,'#7d5539'); R(x,y+.5,2,.5,'#55351f'); }); });
@@ -45,7 +46,9 @@ function cubeArt(b, face){
       : art('jukeS', R => { R(0,0,8,8,'#6b4530'); R(0,0,8,.5,'#5a3826'); R(0,0,.5,8,'#5a3826'); R(0,7.5,8,.5,'#3f2619'); R(7.5,0,.5,8,'#3f2619');
         [[1,1.5],[4.5,1],[2.5,4],[6,3.5],[1,6],[4.5,6]].forEach(([x,y]) => { R(x,y,2,.5,'#7d5539'); R(x,y+.5,2,.5,'#55351f'); }); R(.5,3.75,7,.5,'#4c2f20'); });
     // Dispenser side (the cobblestone side it shares with furnaces and droppers) and its smooth stone top.
-    case 'dispenser': return face==='top' ? art('dispT', R => { R(0,0,8,8,'#9a9a9a'); R(0,0,8,.5,'#b3b3b3'); R(0,0,.5,8,'#b3b3b3'); R(0,7.5,8,.5,'#7a7a7a'); R(7.5,0,.5,8,'#7a7a7a'); R(1,1,6,6,'#a2a2a2'); })
+    case 'dispenser': if (b.d==='S' && face==='front') return art('dispFront', R => { R(0,0,8,8,'#6b6b6b'); R(0,0,8,1.5,'#7e7e7e'); R(0,0,8,.5,'#9a9a9a'); R(0,7.5,8,.5,'#4f4f4f');
+        R(.5,.5,.5,7,'#5a5a5a'); R(7,.5,.5,7,'#5a5a5a'); R(2,2.5,4,3.5,'#3b3b3b'); R(2.5,3,3,2.5,'#1a1a1a'); R(3,3,2,.5,'#2a2a2a'); R(2,2.5,4,.5,'#8a8a8a'); });
+      return face==='top' ? art('dispT', R => { R(0,0,8,8,'#9a9a9a'); R(0,0,8,.5,'#b3b3b3'); R(0,0,.5,8,'#b3b3b3'); R(0,7.5,8,.5,'#7a7a7a'); R(7.5,0,.5,8,'#7a7a7a'); R(1,1,6,6,'#a2a2a2'); })
       : art('dispS', R => { R(0,0,8,8,'#6b6b6b');
         [[0,0,3,1.5,'#7d7d7d'],[3.5,0,4.5,1.5,'#767676'],[0,2,2,2,'#787878'],[2.5,2,3,1.5,'#828282'],[6,2,2,2.5,'#747474'],[0,4.5,3.5,1.5,'#7f7f7f'],[4,4,2,2.5,'#797979'],[6.5,5,1.5,1.5,'#828282'],[0.5,6.5,2.5,1.5,'#747474'],[3.5,7,4,1,'#7b7b7b']].forEach(([x,y,w,h,c]) => { R(x,y,w,h,c); R(x,y,w,.5,'#8c8c8c'); });
         R(0,0,8,.5,'#5a5a5a'); R(0,0,.5,8,'#5a5a5a'); R(0,7.5,8,.5,'#4f4f4f'); R(7.5,0,.5,8,'#4f4f4f'); });
@@ -189,7 +192,7 @@ function makeView(stage, scene, opt={}){
 // drawn on a page overlay with the bench's pearl sprite so it can fly past the wall's edge.
 function makeNavView(stage, L, opt={}){
   const VB = opt.B || 24, T = Math.max(2, Math.round(VB*.14));
-  const v = makeView(stage, L, { B:VB, T, skip:b => b.buried, tint:b => b.t==='rblock' ? .45 : b.y < 0 ? Math.min(.6, -b.y*.2) : 0, entityFilter:() => false });
+  const v = makeView(stage, L, { B:VB, T, skip:b => b.buried || b.t==='water' || b.t==='button', tint:b => b.t==='rblock' ? .45 : b.y < 0 ? Math.min(.6, -b.y*.2) : 0, entityFilter:() => false });
   const [x0,,y0,,,z1] = L.box, sky = opt.overlay, dpr = Math.min(2, window.devicePixelRatio||1), base = v.draw;
   stage.style.height = '';
   v.nav = true;
@@ -203,6 +206,34 @@ function makeNavView(stage, L, opt={}){
     if (sky.width !== innerWidth*dpr || sky.height !== innerHeight*dpr){ sky.width = innerWidth*dpr; sky.height = innerHeight*dpr; sky.style.width = innerWidth+'px'; sky.style.height = innerHeight+'px'; }
     sctx.setTransform(dpr,0,0,dpr,0,0); sctx.clearRect(0,0,innerWidth,innerHeight);
     const r = v.ctx.canvas.getBoundingClientRect();
+    // Stasis chambers: the water block in front of the wall (the dispenser shows through it), bubbles while the soul
+    // sand is under it, the pearl while it is held in stasis, and the button above.
+    const ctx = v.ctx, tsec = now/1000, w = v.world;
+    for (const it of L.items || []){
+      const en = it.pearl, wb = w.get(it.xc, 1, 0), wet = !!wb && wb.t==='water';
+      const f = v.front(it.xc, 1, 0), x = f.x, y = f.y;
+      if (wet){
+        const column = w.bubbleColumn(it.xc+.5, 1.5, .5);
+        if (column) for (let k=0;k<6;k++){ const ph = (tsec*.9 + k/6) % 1, bx = x + VB*(.18 + ((k*37)%60)/100), by = y + VB*(1-ph), sz = Math.max(1.5, VB/16*(k%2 ? 1.5 : 1));
+          ctx.fillStyle = `rgba(210,235,255,${.8*(1-ph*.6)})`; ctx.fillRect(Math.round(bx), Math.round(by), sz, sz); }
+        if (!en.gone && !en.visible){ const bob = Math.sin(tsec*2.4 + it.i)*.05; drawPearl(ctx, x+VB/2, y+VB*(.66+bob), VB, 1); }
+        // water: front and top faces, translucent, with moving light streaks
+        ctx.fillStyle = 'rgba(52,104,214,.48)'; ctx.fillRect(x, y, VB, VB);
+        ctx.fillStyle = 'rgba(90,140,235,.55)'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x+VB, y); ctx.lineTo(x+VB, y-v.T); ctx.lineTo(x, y-v.T); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(180,210,255,.4)';
+        for (let k=0;k<3;k++){ const w1 = y + VB*((k/3 + tsec*.15) % 1), w2 = y + VB*((k/3 + .17 + tsec*.15) % 1);
+          ctx.fillRect(x+VB*.1, Math.round(w1), VB*.35, Math.max(1, VB/24)); ctx.fillRect(x+VB*.55, Math.round(w2), VB*.3, Math.max(1, VB/24)); }
+      }
+      // stone button on the wall face above the chamber
+      const bf = v.front(it.xc, 0, 1), on = it.button.on, bw = VB*6/16, bh = VB*4/16, d = on ? VB/32 : VB/12;
+      const bx = bf.x + (VB-bw)/2, by = bf.y + (VB-bh)/2;
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(bx+d, by+d, bw, bh);
+      ctx.fillStyle = on ? '#7f7f7f' : '#9c9c9c'; ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = on ? '#6a6a6a' : '#b8b8b8'; ctx.fillRect(bx, by, bw, Math.max(1, VB/32));
+    }
+    v.anim = true;   // bubbles, water and the floating pearl keep moving
+    for (const snd of (L.sounds || [])){ if (snd.seen === undefined){ snd.seen = now; if (opt.onSound) opt.onSound(snd); } }
+    if (L.sounds && L.sounds.length > 16) L.sounds.splice(0, L.sounds.length - 4);
     // Note particles: every note a cover plays floats up from that block, colored by pitch as in the game.
     for (const n of (L.notes || [])){
       if (n.seen === undefined){ n.seen = now; if (opt.onNote && (n.k === undefined)) opt.onNote(n); }

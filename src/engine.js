@@ -4,9 +4,9 @@ const OPP = { N:'S', S:'N', E:'W', W:'E', U:'D', D:'U' };
 const DL = ['N','E','S','W','U','D'], HL = ['N','E','S','W'];
 const K = (x,y,z) => ((x+512)*1024 + (y+512))*1024 + (z+512);
 const CONDUCT = new Set(['bricks','wallb','stone','obsidian','lamp','barrel','slime','ground','wall']);
-const MOVABLE = new Set(['rblock','wool','bricks','stone','slime','honey','lamp','observer','piston','planks','noteblock']);
+const MOVABLE = new Set(['rblock','wool','bricks','stone','slime','honey','lamp','observer','piston','planks','noteblock','soulsand']);
 const STICKY = new Set(['slime','honey']);
-const NONSOLID = new Set(['dust','repeater','comparator','torch','lever','button','plate','sculk']);
+const NONSOLID = new Set(['dust','repeater','comparator','torch','lever','button','plate','sculk','water']);
 const live = (b, t) => !(b.t==='piston' && b.ext) && !(b.mv && b.mv.t===t);
 
 // Torch RS latch. A at (ox,oy); output Q on the dust row (ox..ox+3, oy-2*s). s=1: dust row north, inputs south; s=-1 mirrored.
@@ -55,9 +55,15 @@ class World {
   spawn(kind, x, y, z, o={}){ const en = Object.assign({ kind, x, y, z, vx:0, vy:0, vz:0, px:x, py:y, pz:z, ground:false }, o); this.entities.push(en); return en; }
   solidAt(x, y, z){ const fx=Math.floor(x), fy=Math.floor(y), fz=Math.floor(z), b = this.get(fx,fy,fz); if (!b) return false;
     if (NONSOLID.has(b.t)) return false; if (b.t==='trapdoor') return !b.open && (z - fz) >= 0.8125; return true; }
+  // Water: a projectile in water has drag 0.8 instead of 0.99 per game tick. Water standing on soul sand is an upward
+  // bubble column; it holds a pearl in place (a stasis chamber) until the soul sand or the water is gone.
+  waterAt(x, y, z){ const b = this.get(Math.floor(x), Math.floor(y), Math.floor(z)); return !!b && b.t==='water'; }
+  bubbleColumn(x, y, z){ let k = Math.floor(z); if (!this.waterAt(x, y, k)) return false; while (this.waterAt(x, y, k-1)) k--; const b = this.get(Math.floor(x), Math.floor(y), k-1); return !!b && b.t==='soulsand'; }
   stepEntities(){
     for (const en of this.entities){
       if (en.gone) continue;
+      en.stasis = en.projectile && this.bubbleColumn(en.x, en.y, en.z+.125);
+      if (en.stasis){ en.vx = en.vy = en.vz = 0; en.ground = false; continue; }
       if (!en.projectile && !en.ground) en.vz -= 0.04;
       let nz = en.z + en.vz;
       if (en.vz < 0 && this.solidAt(en.x, en.y, nz - 1e-3)){ nz = Math.floor(nz - 1e-3) + 1; en.vz = 0; }
@@ -66,7 +72,7 @@ class World {
       const nx = en.x + en.vx; if (this.solidAt(nx, en.y, en.z + .1)) en.vx = 0; else en.x = nx;
       const ny = en.y + en.vy; if (this.solidAt(en.x, ny, en.z + .1)) en.vy = 0; else en.y = ny;
       en.ground = en.vz <= 0 && this.solidAt(en.x, en.y, en.z - 1e-3);
-      const drag = en.projectile ? .99 : .98, f = !en.projectile && en.ground ? drag*.6 : drag;
+      const drag = en.projectile ? (this.waterAt(en.x, en.y, en.z+.125) ? .8 : .99) : .98, f = !en.projectile && en.ground ? drag*.6 : drag;
       en.vx *= f; en.vy *= f; en.vz *= drag;
       if (en.projectile && !en.ground) en.vz -= .03;
       if (en.z < -40 || Math.abs(en.y) > 200 || Math.abs(en.x) > 200) en.gone = true;
