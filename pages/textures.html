@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Texture and model sheet</title>
+<style>
+:root {
+  --bg: #f3f0e6; --surface: #fbf9f3; --text: #2a251f; --muted: #6b6355; --line: #d9d3c3;
+  --floor: #e2dccd; --floor-line: #d6cfbe; --cavity: #bdb6a6;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --bg: #17161a; --surface: #1f1e23; --text: #e8e3d8; --muted: #9a9488; --line: #34323a;
+  --floor: #2a2930; --floor-line: #313038; --cavity: #121215;
+  color-scheme: dark;
+}
+body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.5 ui-monospace, Menlo, monospace; }
+header { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--line); }
+header h1 { font-size: 15px; margin: 0; }
+header label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+main { padding: 0 16px 48px; }
+h2 { font-size: 14px; margin: 28px 0 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.tex { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.tex figure { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.tex .sizes { display: flex; align-items: flex-end; gap: 6px; }
+.tex canvas { image-rendering: pixelated; background: repeating-conic-gradient(#8884 0 25%, transparent 0 50%) 0 0 / 8px 8px; }
+.tex figcaption { font-size: 11px; color: var(--muted); word-break: break-all; }
+.model { margin: 0 0 18px; }
+.model h3 { font-size: 12px; margin: 0 0 4px; color: var(--muted); font-weight: 400; }
+.model .scales { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
+.stage { position: relative; }
+.stage canvas { position: absolute; left: 0; top: 0; image-rendering: pixelated; }
+.notes { color: var(--muted); max-width: 80ch; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Texture and model sheet</h1>
+  <label><input type="checkbox" id="dark"> dark</label>
+  <label><input type="checkbox" id="inspect"> inspect (x-ray)</label>
+  <label>scales <select id="scales"><option value="16,24,48">16, 24, 48</option><option value="48">48</option><option value="24">24</option><option value="16">16</option></select></label>
+  <label>only <input id="only" size="12" placeholder="model type"></label>
+</header>
+<main>
+  <p class="notes">Every texture in the atlas by name, then every block model in its states and facings, drawn by the renderer at 16, 24 and 48 px per block. Labels under a strip list its variants left to right. Loads the source files directly; no build needed.</p>
+  <section id="models"></section>
+  <h2>Textures</h2>
+  <div class="tex" id="tex"></div>
+</main>
+<script src="../src/engine.js"></script>
+<script src="../src/textures.js"></script>
+<script src="../src/render.js"></script>
+<script>
+(() => {
+  const RS = window.RS;
+  const RSR = window.RSR;
+  const TX = window.Redstone.textures;
+  const params = new URLSearchParams(location.search);
+  const $ = s => document.querySelector(s);
+  const DIRS = ['N', 'E', 'S', 'W', 'U', 'D'];
+  const H = ['N', 'E', 'S', 'W'];
+
+  if (params.get('theme') === 'dark') $('#dark').checked = true;
+  if (params.get('inspect')) $('#inspect').checked = true;
+  if (params.get('scales')) $('#scales').value = params.get('scales');
+  if (params.get('only')) $('#only').value = params.get('only');
+
+  // Each strip: a list of variants. A variant places its blocks at column x (the floor and supports are added).
+  // put(dx, dy, dz, type, state) places relative to the variant's cell; floor: false leaves out the stone floor.
+  const STRIPS = [];
+  const strip = (name, variants, opt = {}) => STRIPS.push({ name, variants, opt });
+  const v = (label, fn, opt = {}) => ({ label, fn, ...opt });
+  const one = (type, state = {}) => put => put(0, 0, 0, type, state);
+
+  strip('stone family', ['stone', 'cobblestone', 'bricks', 'smooth_stone', 'iron', 'quartz', 'obsidian', 'bedrock', 'dirt', 'wall', 'wallb', 'ground'].map(t => v(t, one(t))));
+  strip('functional cubes', ['rblock', 'soulsand', 'magma', 'noteblock', 'jukebox', 'target', 'glass', 'slime', 'honey'].map(t => v(t, one(t))));
+  strip('wool', Object.keys(TX.DYES).map(c => v(c, one('wool', { color: c }))));
+  strip('concrete', Object.keys(TX.DYES).map(c => v(c, one('concrete', { color: c }))));
+  strip('glazed terracotta', [...Object.keys(TX.DYES).map(c => v(c, one('terracotta', { color: c, d: 'N' }))), ...H.map(d => v('d=' + d, one('terracotta', { color: 'cyan', d })))]);
+  strip('lamp, copper bulb', [
+    v('lamp', one('lamp')), v('lamp lit', one('lamp', { lit: true })),
+    v('bulb', one('bulb')), v('lit', one('bulb', { lit: true })), v('powered', one('bulb', { powered: true })), v('lit powered', one('bulb', { lit: true, powered: true })),
+  ]);
+  strip('piston', [false, true].flatMap(s => DIRS.flatMap(d => [
+    v(`${s ? 'sticky ' : ''}${d}`, one('piston', { d, s })),
+    v(`ext ${d}`, put => {
+      const p = put(0, 0, 0, 'piston', { d, s, ext: true });
+      const o = RS.D[d];
+      put(o[0], o[1], o[2], 'head', { d, s, p });
+    }, { pad: d === 'E' || d === 'W' ? 2 : 1 }),
+  ])), { lift: 1 });
+  strip('observer', [false, true].flatMap(on => DIRS.map(d => v(`${d}${on ? ' on' : ''}`, one('observer', { d, on })))));
+  strip('dispenser, dropper, furnace', [
+    ...DIRS.map(d => v('disp ' + d, one('dispenser', { d }))),
+    ...DIRS.map(d => v('drop ' + d, one('dropper', { d }))),
+    v('furnace', one('furnace', { d: 'S' })), v('lit', one('furnace', { d: 'S', lit: true })), v('furnace E', one('furnace', { d: 'E' })),
+  ]);
+  strip('barrel, chest, bookshelf', [
+    ...DIRS.map(d => v('barrel ' + d, one('barrel', { d }))), v('open S', one('barrel', { d: 'S', open: true })), v('legacy', one('barrel', {})),
+    v('chest', one('chest', { d: 'S' })), v('chest N', one('chest', { d: 'N' })),
+    v('shelf', one('bookshelf', { d: 'S', slots: 0 })), v('3 books', one('bookshelf', { d: 'S', slots: 0b100101 })), v('full', one('bookshelf', { d: 'S', slots: 63 })), v('shelf E', one('bookshelf', { d: 'E' })),
+  ]);
+  const DUST = { lone: [], 'N-S': ['N', 'S'], 'E-W': ['E', 'W'], corner: ['N', 'E'], tee: ['N', 'E', 'W'], cross: ['N', 'E', 'S', 'W'] };
+  strip('redstone dust', [0, 7, 15].flatMap(lvl => Object.entries(DUST).map(([k, pts]) => v(`${k} ${lvl}`, one('dust', { lvl, pts: pts.length ? pts : ['N', 'E', 'S', 'W'] })))));
+  strip('repeater', [
+    ...H.map(d => v('d=' + d, one('repeater', { d, delay: 1 }))),
+    ...[1, 2, 3, 4].map(n => v('delay ' + n, one('repeater', { d: 'N', delay: n }))),
+    ...[1, 4].map(n => v(`on ${n}`, one('repeater', { d: 'E', delay: n, on: true }))),
+    v('locked', one('repeater', { d: 'N', delay: 2, locked: true })),
+  ]);
+  strip('comparator', [
+    ...H.map(d => v('d=' + d, one('comparator', { d }))),
+    v('on', one('comparator', { d: 'N', out: 9 })), v('sub', one('comparator', { d: 'N', mode: 'sub' })), v('sub on', one('comparator', { d: 'E', mode: 'sub', out: 4 })),
+  ]);
+  const wallFor = att => { const o = RS.D[att]; return o; };
+  const attached = (type, state) => put => {
+    const o = wallFor(state.att || 'D');
+    if (state.att && state.att !== 'D') put(o[0], o[1], o[2], 'stone');
+    put(0, 0, 0, type, state);
+  };
+  strip('torch', [false, true].flatMap(lit => ['D', 'N', 'E', 'W'].map(att => v(`${att}${lit ? ' lit' : ''}`, attached('torch', { att, lit }), { pad: 2 })))) ;
+  strip('lever', [false, true].flatMap(on => ['D', 'N', 'E', 'W', 'U'].map(att => v(`${att}${on ? ' on' : ''}`, attached('lever', { att, on }), { pad: 2 }))), { lift: 1 });
+  strip('button, pressure plate', [
+    ...[false, true].flatMap(on => ['D', 'N', 'E', 'W', 'U'].map(att => v(`${att}${on ? ' on' : ''}`, attached('button', { att, on }), { pad: 2 }))),
+    v('oak', attached('button', { att: 'N', wood: true }), { pad: 2 }),
+    v('plate', one('plate')), v('on', one('plate', { on: true })), v('oak plate', one('plate', { wood: true })),
+  ], { lift: 1 });
+  strip('sign', [
+    v('wall N', attached('sign', { att: 'N' }), { pad: 2 }), v('wall E', attached('sign', { att: 'E' }), { pad: 2 }), v('wall W', attached('sign', { att: 'W' }), { pad: 2 }),
+    v('standing', one('sign', { att: 'D', kind: 'standing' })), v('hanging', attached('sign', { att: 'U', kind: 'hanging' })),
+  ], { lift: 1 });
+  strip('lectern, bell, hopper, daylight, sculk', [
+    ...H.map(d => v('lectern ' + d, one('lectern', { d, pages: 3 }))), v('no book', one('lectern', { d: 'N' })),
+    v('bell', one('bell', { att: 'D' })), v('ringing', one('bell', { att: 'D', ringing: true })), v('bell U', attached('bell', { att: 'U' })), v('bell N', attached('bell', { att: 'N' }), { pad: 2 }),
+    ...['D', 'N', 'E', 'S', 'W'].map(d => v('hopper ' + d, one('hopper', { d }))),
+    v('daylight', one('daylight')), v('inverted', one('daylight', { inverted: true })),
+    v('sculk', one('sculk')), v('sculk on', one('sculk', { on: true, out: 12 })),
+  ], { lift: 1 });
+  strip('door, trapdoor, gate', [
+    ...[false, true].flatMap(open => H.map(d => v(`door ${d}${open ? ' open' : ''}`, put => { put(0, 0, 0, 'door', { d, open, half: 'lower' }); put(0, 0, 1, 'door', { d, open, half: 'upper' }); }))),
+    v('oak door', put => { put(0, 0, 0, 'door', { d: 'N', iron: false, half: 'lower' }); put(0, 0, 1, 'door', { d: 'N', iron: false, half: 'upper' }); }),
+    v('trap top', one('trapdoor', { half: 'top' })), v('bottom', one('trapdoor', { half: 'bottom' })),
+    ...H.map(d => v('open ' + d, one('trapdoor', { d, open: true }))), v('iron', one('trapdoor', { iron: true, half: 'bottom' })),
+    v('gate', one('gate', { d: 'N' })), v('open', one('gate', { d: 'N', open: true })), v('gate E', one('gate', { d: 'E' })), v('open E', one('gate', { d: 'E', open: true })),
+  ]);
+  strip('water, bubble column, entities', [
+    v('water', one('water')),
+    v('column', put => { put(0, 0, -1, 'soulsand'); put(0, 0, 0, 'water'); put(0, 0, 1, 'water'); }, { floor: false }),
+    v('stasis pearl', (put, w, x) => { put(0, 0, -1, 'soulsand'); put(0, 0, 0, 'water'); w.spawn('pearl', x + 0.5, 0.5, 0.375, { projectile: true, visible: false, stasis: true }); }, { floor: false }),
+    v('pearl', (put, w, x) => { w.spawn('pearl', x + 0.5, 0.5, 0, {}); }),
+    v('item', (put, w, x) => { w.spawn('item', x + 0.5, 0.5, 0, { id: 'redstone' }); }),
+    v('missing', one('no_such_block')),
+  ]);
+
+  function buildStrip(def) {
+    const w = new RS.World();
+    let x = 0;
+    const lift = def.opt.lift || 0;
+    for (const variant of def.variants) {
+      const put = (dx, dy, dz, t, o) => w.put(x + dx, dy, dz + lift, t, o || {});
+      if (variant.floor !== false) for (let k = 0; k < (variant.pad || 1); k++) w.put(x + k - (variant.pad > 1 ? 1 : 0), 0, -1 + lift, 'stone');
+      variant.fn(put, w, x);
+      x += (variant.pad || 1) + 1;
+    }
+    // Let the engine fill in dust connections and the like without changing explicit states: only computePower.
+    if (w.computePower) {
+      const saved = [...w.c.values()].filter(b => b.t === 'dust').map(b => [b, b.lvl, b.pts]);
+      w.computePower();
+      for (const [b, lvl, pts] of saved) { b.lvl = lvl; b.pts = pts; }
+    }
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const b of w.c.values()) {
+      x0 = Math.min(x0, b.x); x1 = Math.max(x1, b.x); y0 = Math.min(y0, b.y); y1 = Math.max(y1, b.y); z0 = Math.min(z0, b.z); z1 = Math.max(z1, b.z);
+    }
+    for (const en of w.entities) { x0 = Math.min(x0, Math.floor(en.x)); x1 = Math.max(x1, Math.floor(en.x)); }
+    return { world: w, box: [x0 - 1, x1 + 1, Math.min(y0, -1), Math.max(y1, 1), z0, z1 + 1] };
+  }
+
+  const liveViews = [];
+  function render() {
+    for (const v of liveViews.splice(0)) RSR.removeView(v);
+    document.documentElement.dataset.theme = $('#dark').checked ? 'dark' : 'light';
+    RSR.readPal();
+    const scales = $('#scales').value.split(',').map(Number);
+    const only = $('#only').value.trim();
+    const host = $('#models');
+    host.innerHTML = '<h2>Models</h2>';
+    for (const def of STRIPS) {
+      if (only && !def.name.includes(only)) continue;
+      const box = document.createElement('div');
+      box.className = 'model';
+      box.innerHTML = `<h3>${def.name}: ${def.variants.map(x => x.label).join(' · ')}</h3><div class="scales"></div>`;
+      host.appendChild(box);
+      for (const B of scales) {
+        const stage = document.createElement('div');
+        stage.className = 'stage';
+        stage.title = `${B} px per block`;
+        box.querySelector('.scales').appendChild(stage);
+        const built = buildStrip(def);
+        const view = RSR.makeView(stage, built, { B, T: Math.round(B * 0.5), inspect: $('#inspect').checked });
+        view.draw();
+        liveViews.push(view);
+      }
+    }
+  }
+
+  function renderTextures() {
+    const host = $('#tex');
+    host.innerHTML = '';
+    for (const name of [...TX.names, 'missing/example']) {
+      const fig = document.createElement('figure');
+      const sizes = document.createElement('div');
+      sizes.className = 'sizes';
+      for (const s of [16, 24, 48]) {
+        const c = document.createElement('canvas');
+        c.width = c.height = s;
+        const g = c.getContext('2d');
+        g.imageSmoothingEnabled = false;
+        g.drawImage(TX.get(name), 0, 0, s, s);
+        sizes.appendChild(c);
+      }
+      fig.appendChild(sizes);
+      const cap = document.createElement('figcaption');
+      cap.textContent = name + (TX.frames(name) > 1 ? ` (${TX.frames(name)} frames)` : '');
+      fig.appendChild(cap);
+      host.appendChild(fig);
+    }
+  }
+
+  for (const id of ['#dark', '#inspect', '#scales']) $(id).addEventListener('change', render);
+  $('#only').addEventListener('input', render);
+  render();
+  renderTextures();
+  // Animate what animates (water, bubbles, ringing bells).
+  const frame = now => {
+    for (const v of liveViews) if (v.anim) v.draw(now);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
