@@ -484,11 +484,12 @@ class RedstoneElement extends HTMLElement {
   get label() { return this._labelText(); }
   // Re-read --rs-block and the container width after a change the element cannot observe (an ancestor's CSS).
   refresh() { this._resized(); }
-  // A player action from a component's own DOM code (a slider drag, a text field, typeahead): fn(hand, io, built)
-  // goes the same way as a control's act (disabled, reduced motion, waking the world). With { settle: true } the
+  // A player action from outside the element's controls (a trigger elsewhere on the page, a method such as
+  // showModal(), a slider drag, a text field, typeahead): act(hand, io, built). Like a control: ignored while
+  // disabled, settled at once with reduced motion. opts: { event } is the input event; with { settle: true } the
   // world is settled and the state applied at once, so the element's events fire before this returns.
-  act(fn, opts = {}) {
-    this._activate({ act: fn }, null, opts.event);
+  perform(act, opts = {}) {
+    this._activate({ act }, null, opts.event || null);
     if (!opts.settle || !this._ctl || this._isDisabled()) return;
     const changes = this._ctl.settle();
     this._apply(this._ctl.state, changes, false);

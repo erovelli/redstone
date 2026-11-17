@@ -24,11 +24,11 @@ function levelAt(el, view, built, ev) {
 function mounted(el, view, built) {
   const btn = el.shadowRoot.querySelector('.hit[role="slider"]');
   if (!btn) return;
-  const aim = ev => el.act((hand, io, b) => {
+  const aim = ev => el.perform((hand, io, b) => {
     if (!b.drag) b.drag = { from: b.scale.text(level(io)) };
     return b.moveTo(hand, levelAt(el, view, b, ev));
   }, { event: ev, settle: true });
-  const release = ev => el.act((hand, io, b) => { b.drag = null; return false; }, { event: ev, settle: true });
+  const release = ev => el.perform((hand, io, b) => { b.drag = null; return false; }, { event: ev, settle: true });
   btn.addEventListener('pointerdown', ev => {
     if (ev.button !== 0) return;
     btn.setPointerCapture(ev.pointerId);

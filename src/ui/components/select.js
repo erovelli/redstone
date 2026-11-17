@@ -69,7 +69,7 @@ function onKey(el, ev) {
   const expanded = !!b.io.bulb.lit;      // where the flip-flop is heading
   const act = (fn, prevent = true) => {
     if (prevent) ev.preventDefault();
-    el.act(fn, { event: ev });
+    el.perform(fn, { event: ev });
   };
   const move = to => {
     ev.preventDefault();
@@ -118,14 +118,14 @@ function mounted(el, view, built) {
     cap.className = 'rs-chosen';
     cap.setAttribute('part', 'label');
     cap.setAttribute('aria-hidden', 'true');
-    cap.addEventListener('click', ev => el.act((hand, io, b) => b.toggle(hand), { event: ev }));
+    cap.addEventListener('click', ev => el.perform((hand, io, b) => b.toggle(hand), { event: ev }));
     root.insertBefore(cap, box.nextSibling);
     // Options are content shown through the opening: a click chooses, hovering makes it the active one.
     const win = root.querySelector('.window');
     const optionAt = ev => options(el).indexOf(ev.target.closest && ev.target.closest('option'));
     win.addEventListener('click', ev => {
       const k = optionAt(ev);
-      if (k >= 0 && el.open) el.act((hand, io, b) => b.choose(hand, k), { event: ev });
+      if (k >= 0 && el.open) el.perform((hand, io, b) => b.choose(hand, k), { event: ev });
     });
     win.addEventListener('pointermove', ev => {
       const k = optionAt(ev), b = el.contraption && el.contraption.built;
