@@ -1,0 +1,10 @@
+/* rs-progress: before the element upgrades, show its label and reserve the bar's height
+   (3 blocks tall, 2 rows deep: 3 x 1 + 2 x 0.72 blocks). */
+rs-progress:not(:defined) {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  box-sizing: border-box;
+  min-height: calc(var(--rs-block, 16px) * 4.44);
+  padding: 0 .4em;
+}

@@ -1,0 +1,12 @@
+<section class="demo" data-tag="rs-collapse">
+  <p>Use it where you would use <code>&lt;details&gt;</code>. The opening is sized from the body and the available width; links and fields inside it are reachable only while it is open.</p>
+  <!-- example -->
+  <rs-collapse summary="Shipping"><p>Ships in two days. <a href="#rs-collapse">Track an order</a>.</p></rs-collapse>
+  <rs-collapse open>
+    <span slot="summary">Returns</span>
+    <p>Thirty days, no questions.</p>
+    <label>Order number <input name="order" size="10"></label>
+  </rs-collapse>
+  <rs-collapse summary="Locked" disabled><p>Not today.</p></rs-collapse>
+  <!-- /example -->
+</section>

@@ -1,0 +1,5 @@
+/* rs-spoiler: before the element upgrades, the content stays readable (progressive enhancement). */
+rs-spoiler:not(:defined) {
+  display: inline-block;
+  min-height: calc(var(--rs-block, 20px) * 4.16);
+}

@@ -47,7 +47,7 @@ In Node, `require('redstone')` returns the catalogue (with `.engine`), `require(
 ```
 src/engine.js                 World (3D tick engine) and shared sub-circuits
 src/blocks/*.js               extra block definitions, one per file, self-registering
-src/contraptions/*.js         legacy builders: logic, scenes, doors, plaque, launcher
+src/contraptions/*.js         legacy builders: logic, scenes, doors, launcher
 src/catalogue.js              legacy entries, registry (register, get), generic tests
 src/contraptions/ui/*.js      UI contraptions: builder + Catalogue.register(entry) with tests
 src/render.js                 renderer: front + top faces, sprites, ghosting, entities
@@ -81,15 +81,15 @@ test/run.js                   catalogue tests + every test/**/*.test.js suite
 | Signals | Comparator fill reader (`comparator-reader`) | barrel fill | signal 0 to 15 | fill |
 | | Comparator subtractor (`comparator-subtractor`) | barrel A, barrel B | A - B, or A unless B is stronger | a, b, mode |
 | Sensors | Sculk presence latch (`sculk-latch`) | vibrations, reset | Q (latched) | |
-| Reveals | Pull-down cover reveal (`plate-reveal`) | pressure plate | one row revealed | width |
 | Flying machines | 2-way flying machine (`flying-machine`) | lever | column position | cargo |
 | | Flying-machine split door (`split-door`) | lever or sculk latch | opening 2L tall | width, cargo, trigger |
 | Doors | 2x2 piston door (`piston-door-2x2`) | lever | 2x2 passage | |
 | | Flush 2x2 hidden door (`hidden-2x2`) | lever or sculk latch, reset | 2x2 passage | trigger |
-| | Hidden plaque (`hidden-plaque`) | lever or sculk latch, reset | text bands | width, bands, trigger |
 | Navigation | Ender pearl launcher (`pearl-launcher`) | button per item | item launched toward the viewer | items |
 | Form controls | Toggle switch (`ui-toggle`, `<rs-toggle>`) | lever | lamp | signs, dust |
 | | Push button (`ui-button`, `<rs-button>`) | stone button | lamp pulse | signs, dust, wood |
+| Disclosure and overlays | Collapse (`ui-collapse`, `<rs-collapse>`) | lever | opening clear / curtain home | cols, rows, signs |
+| | Spoiler (`ui-spoiler`, `<rs-spoiler>`) | stone pressure plate | opening clear / curtain home | cols, rows |
 
 The catalogue site lists the same entries with timing, footprint, part counts, notes, and a live bench.
 

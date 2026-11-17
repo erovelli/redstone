@@ -1,0 +1,8 @@
+/* rs-status: before the element upgrades, show its label and reserve the dot's height (2 x 1 + 0.72 blocks). */
+rs-status:not(:defined) {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  min-height: calc(var(--rs-block, 16px) * 2.72);
+  padding: 0 .4em;
+}

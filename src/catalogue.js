@@ -6,7 +6,6 @@ const Lg = N ? require('./contraptions/logic.js') : window.Logic;
 const Sc = N ? require('./contraptions/scenes.js') : window.Scenes;
 const { buildDoor } = N ? require('./contraptions/door.js') : window;
 const { buildHidden } = N ? require('./contraptions/hidden.js') : window;
-const { buildPlaque } = N ? require('./contraptions/plaque.js') : window;
 const { buildLauncherNav, buildSharedLauncherNav, buildHiddenLauncherNav } = N ? require('./contraptions/launcher.js') : window;
 const { buildPistonDoor } = N ? require('./contraptions/pistondoor.js') : window;
 
@@ -19,7 +18,6 @@ const require_engine = () => RS;
 const doorArea = (G) => { const w=G.world; let n=0; for (let x=0;x<G.W;x++) for (const y of [1,2]) for (let z=0;z<2*G.L;z++) if (w.get(x,y,z)) n++; return n; };
 const hiddenClear = (H) => { for (const x of [0,1]) for (let y=0;y<=5;y++) for (const z of [0,1]) if (H.world.get(x,y,z)) return false; return true; };
 const truth = (build, want) => [[0,0],[1,0],[0,1],[1,1]].every(([a,b],i) => { const c=build(), w=c.world; w.run(5); c.io.a.on=!!a; c.io.b.on=!!b; w.run(20); return !!c.io.lamp.lit === !!want[i]; });
-const plaqueClear = (P) => P.bands.every(z0 => { for (let x=0;x<P.W;x++) for (let y=P.F-2;y<=P.F;y++) for (const z of [z0,z0+1]) if (P.world.get(x,y,z)) return false; return true; });
 
 const entries = [
 { id:'lever-lamp', name:'Lever and lamp', category:'Toggles & logic',
@@ -161,15 +159,6 @@ const entries = [
           T('latches on a near step and holds', () => { const c=Lg.sculkLatch(), w=c.world; w.run(3); w.vibrate(1,5,0); w.run(60); return c.io.lamp.lit && c.io.sensor.state==='idle'; }),
           T('reset clears it and the button is not heard', () => { const c=Lg.sculkLatch(), w=c.world; w.run(3); w.vibrate(1,5,0); w.run(40); press(w,c.io.reset); w.vibrate(c.io.reset.x,c.io.reset.y,0); w.run(40); return !c.io.lamp.lit; }) ] },
 
-{ id:'plate-reveal', monitor:(c) => ({ 'covers down': `${c.covers.filter(b=>b.z===0).length} / ${c.covers.length}` }), name:'Pull-down cover reveal', category:'Reveals',
-  summary:'Standing on a pressure plate turns off a torch under the floor. Sticky pistons lose power and pull a row of cover blocks down, revealing what is behind them. Step off and they push the covers back up.',
-  inputs:['pressure plate'], outputs:['one row revealed'], timing:'About 3 ticks to reveal.',
-  params:[{ key:'width', label:'Width', min:4, max:16, def:10 }],
-  controls:[{ kind:'plate', io:'plate', label:'Stand on plate' }],
-  build:(p) => { const c=Sc.contact(p.width); c.io={ plate:c.plate }; return c; },
-  tests:[ T('reveals while pressed, recovers after', () => { const c=Sc.contact(12), w=c.world; w.run(4); const a=c.covers.every(b=>b.z===1); c.plate.on=true; w.run(6); const b=c.covers.every(b=>b.z===0); c.plate.on=false; w.run(6); return a && b && c.covers.every(b=>b.z===1); }),
-          T('timing: revealed at +3', () => { const c=Sc.contact(10), w=c.world; w.run(4); c.plate.on=true; return first(w,()=>c.covers.every(b=>b.z===0))===3; }) ] },
-
 { id:'flying-machine', monitor:(c) => { let z=1e9; for (const b of c.world.c.values()) if (b.x===0 && (b.y===1||b.y===2) && b.t!=='obsidian') z=Math.min(z,b.z); return { 'height above home': `${z-c.L} blocks` }; }, name:'2-way flying machine', category:'Flying machines',
   summary:'A column that flies itself: 2 sticky pistons, 2 observers, slime or honey, plus cargo. Powering one piston sends it out; powering the other brings it back.',
   inputs:['lever (observer pulse into the wall behind each engine)'], outputs:['column position'], timing:'First move at +8, then 1 block every 3 ticks.',
@@ -211,18 +200,6 @@ const entries = [
   tests:[ T('opens a clear passage and recloses identical, twice', () => { const H=buildHidden(), w=H.world, sn=()=>snapIn(w,b=>b.y<=5), clear=()=>{ for (const x of [0,1]) for (let y=0;y<=5;y++) for (const z of [0,1]) if (w.get(x,y,z)) return false; return true; }; w.run(3); const c0=sn(); let ok=true; for (let k=0;k<2;k++){ H.lever.on=true; w.run(25); ok = ok && clear(); H.lever.on=false; w.run(25); ok = ok && sn()===c0; } return ok; }),
           T('timing: open +11, closed +12', () => { const H=buildHidden(), w=H.world, sn=()=>snapIn(w,b=>b.y<=5); w.run(3); const c0=sn(); H.lever.on=true; const o=first(w,()=>hiddenClear(H)); w.run(20); H.lever.on=false; return o===11 && first(w,()=>sn()===c0)===12; }),
           T('sculk opens, reset closes identical and it cannot hear itself', () => { const H=buildHidden({ trigger:'sculk' }), w=H.world, sn=()=>snapIn(w,b=>b.y<=5); w.run(3); const c0=sn(); w.vibrate(H.sensor.x+1,H.sensor.y+5,0); w.run(60); const a=hiddenClear(H); press(w,H.button); w.vibrate(H.button.x,H.button.y,0); w.run(100); return a && sn()===c0; }) ] },
-
-{ id:'hidden-plaque', monitor:(c) => ({ 'bands open': `${c.bands.filter(z0 => { for (let x=0;x<c.W;x++) for (let y=c.F-2;y<=c.F;y++) for (const z of [z0,z0+1]) if (c.world.get(x,y,z)) return false; return true; }).length} / ${c.bands.length}` }), name:'Hidden plaque (stacked bands)', category:'Doors',
-  summary:'A flush hidden door scaled up to reveal text. Each band is a 2-tall opening of any width, with hidden pullers above and below, revealing a plaque 3 blocks deep.',
-  inputs:['lever or sculk latch','reset button'], outputs:['n text bands, 2 rows each'], timing:'Open at +11, closed at +12.', depth:true, plaque:true,
-  params:[{ key:'width', label:'Width', min:4, max:20, def:10 },{ key:'bands', label:'Bands', min:1, max:3, def:2 },{ key:'trigger', label:'Trigger', options:['sculk','lever'], def:'sculk' }],
-  notes:['Uses wiring links: the trigger output reaches the station blocks next to the pistons through links that stand in for buried wiring.','Bands are capped at 2 tall: after a brick pulls in, it must slide into an empty neighbor.','Bands need 4 rows of wall between them for the pullers.','Use a low camera tilt; at a steep angle the slot lip hides the plaque.'],
-  controls:[{ kind:'lever', io:'lever', label:'Lever' },{ kind:'walk', io:'sensor' },{ kind:'button', io:'button', label:'Reset' }],
-  build:(p) => { const P=buildPlaque(p.width,p.bands,{ trigger:p.trigger }); P.box=P.box.slice(); P.box[4]=-1; P.io={ lever:P.lever, sensor:P.sensor, button:P.button }; return P; },
-  tests:[ T('opens all bands and recloses identical, twice', () => { const P=buildPlaque(8,2,{ trigger:'lever' }), w=P.world, sn=()=>snapIn(w,b=>b.y<=P.F); w.run(3); const c0=sn(); let ok=true; for (let k=0;k<2;k++){ P.lever.on=true; w.run(30); ok = ok && plaqueClear(P); P.lever.on=false; w.run(30); ok = ok && sn()===c0; } return ok; }),
-          T('sculk opens, reset closes and stays closed', () => { const P=buildPlaque(8,2), w=P.world; w.run(3); w.vibrate(1,P.sensor.y+5,0); w.run(40); const a=plaqueClear(P); press(w,P.button); w.vibrate(P.button.x,P.button.y,0); w.run(80); return a && !plaqueClear(P); }),
-          T('timing: open +11, closed +12', () => { const P=buildPlaque(8,2,{ trigger:'lever' }), w=P.world, sn=()=>snapIn(w,b=>b.y<=P.F); w.run(3); const c0=sn(); P.lever.on=true; const o=first(w,()=>plaqueClear(P)); w.run(20); P.lever.on=false; return o===11 && first(w,()=>sn()===c0)===12; }),
-          T('sculk trigger at width 20, 3 bands', () => { const P=buildPlaque(20,3), w=P.world; w.run(3); w.vibrate(1,P.sensor.y+5,0); w.run(40); const a=plaqueClear(P); press(w,P.button); w.vibrate(P.button.x,P.button.y,0); w.run(80); return a && !plaqueClear(P); }) ] },
 
 { id:'pearl-launcher', name:'Ender pearl launcher', category:'Navigation',
   summary:'A nav button that is a machine. Pressing the button on a glass box opens its trapdoor floor, and the ender pearl drops onto a slime plate. Eight ticks later a pair of sticky pistons drives the plate into the pearl and flings it off screen.',
@@ -426,7 +403,7 @@ const entries = [
             w.tick(); return Math.abs(p.y-y)<1e-9 && Math.abs(p.z-z)<1e-9 && Math.abs(p.vy-vy)<1e-9 && Math.abs(p.vz-vz)<1e-9;
           }) ] },
 ];
-const CATEGORIES = ['Toggles & logic','Clocks & pulses','Signals','Sensors','Reveals','Flying machines','Doors','Navigation'];
+const CATEGORIES = ['Toggles & logic','Clocks & pulses','Signals','Sensors','Flying machines','Doors','Navigation'];
 const defaults = e => Object.fromEntries((e.params||[]).map(p => [p.key, p.def]));
 // Generic checks every entry gets, run through build(params) at every parameter edge (min, default, max, each option).
 const edges = e => (e.params||[]).reduce((acc,p) => acc.flatMap(a => [...new Set(p.options || [p.min, p.def, p.max])].map(v => ({ ...a, [p.key]:v }))), [{}]);

@@ -1,0 +1,9 @@
+/* rs-spinner: before the element upgrades, show its label and reserve the ring's height
+   (2 blocks tall, 3 rows deep: 2 x 1 + 3 x 0.72 blocks). */
+rs-spinner:not(:defined) {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  min-height: calc(var(--rs-block, 16px) * 4.16);
+  padding: 0 .4em;
+}

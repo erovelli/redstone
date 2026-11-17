@@ -95,6 +95,10 @@ Redstone.ui.define('rs-toggle', {
 | `entry` | string or entry object | Catalogue id to build (an unregistered entry object works for test elements). |
 | `params` | `{ paramKey: mapping }` | How the builder's params come from the element. Missing keys use the entry's defaults. |
 | `label` | io key or `'beside'` | An io key places the light-DOM text (the default slot) on those sign blocks. `'beside'` sets it next to the machine as ordinary page text, like a native label; clicking it operates the primary control. Use `'beside'` for inline form controls and signs when the text is part of the machine (see SPEC I3). |
+| `labelSlot` | string | With `label: 'signs'`: put this named slot on the signs instead of the default slot, so the default slot can go through an opening (rs-collapse: `slot="summary"`). |
+| `labelFallback(el)` | function | Text shown on the signs while nothing is slotted into `labelSlot` (for example a `summary` attribute). |
+| `readLabel` | boolean | Keep the sign text (`label: 'signs'`) readable to screen readers, for elements whose text is content rather than a control's name (chips, badges). Default: hidden, because the controls carry it. |
+| `host` | `{ role, aria }` | Role and ARIA on the element itself, through `ElementInternals` (attributes as a fallback): `role` is a string or `el => string`; `aria` maps `ElementInternals` names without the `aria` prefix (`valueNow`, `busy`, `label`) to a state key or `(state, el) => value` (`null` removes it). For elements with no control of their own (`progressbar`, `status`). |
 | `opening` | object or array | Slotted content shown through a world opening; see below. |
 | `controls` | array | Focusable controls over interactive blocks; see below. |
 | `state` | `{ key: output }` | Outputs: each becomes a property (and optionally an attribute, events, an announcement). |
@@ -124,6 +128,7 @@ Changing a mapped attribute rebuilds the contraption from scratch (a new world).
 | `area` | io keys whose blocks form the hit area (for example the button and its label signs). |
 | `label` | Accessible name: string or `el => string`. Default: `aria-label`, else the light-DOM text, else the `<label>` text. |
 | `keys` | `{ ArrowUp: act, ArrowDown: act }`: extra keys (the default prevented). Space and Enter already click a button. |
+| `hover` | `{ enter, leave }` actions (names or functions, like `act`) for a control the pointer stands on: the pointer over the element, or focus inside it, is `enter`; leaving both is `leave`; a touch tap is `enter` and tapping elsewhere is `leave` (rs-spoiler's pressure plate). |
 | `primary` | This control is the one a `<label for>` click or `el.click()` operates (default: the first). |
 
 **`state` outputs**:
@@ -134,6 +139,8 @@ Changing a mapped attribute rebuilds the contraption from scratch (a new world).
 | `attr` | Reflect to this attribute (boolean: presence; other: string; `null`: removed). |
 | `event` | Event type or list fired when it changes: `click` is a `MouseEvent` (composed, cancelable); others are `CustomEvent`s with `detail: { key, value, prev }` (`input` is composed). |
 | `when` | `'change'` (default), `'rise'` (false to true), `'fall'`. |
+| `cancelable` | Its events are cancelable (check `change.dispatched[i].defaultPrevented` in `changed`). |
+| `settle: false` | Setting the property does not settle the world at once: it wakes it, and the events fire as the output changes. For outputs driven by a redstone timer (a toast), where settling would run the timer out. |
 | `set(hand, io, value, built)` | Makes the property writable: perform the player action that leads to `value`. The core then settles the world at once, so the getter returns the new value straight away, and fires no events (like native `checked`). Leave it out for read-only outputs. |
 | `announce(value, el)` | Text for the live region when it changes from user input. |
 | `doc`, `eventDoc` | Docs table text. |

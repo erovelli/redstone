@@ -1,0 +1,8 @@
+/* rs-chip, rs-badge: before the element upgrades, show the text as a small inline tag. */
+rs-chip:not(:defined), rs-badge:not(:defined) {
+  display: inline-block;
+  vertical-align: middle;
+  padding: 0 .5em;
+  border: 1px solid currentColor;
+  font: 500 13px/1.6 ui-monospace, Menlo, Consolas, monospace;
+}

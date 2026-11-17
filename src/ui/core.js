@@ -89,6 +89,16 @@ function paramAttributes(spec) {
   return out;
 }
 
+// Params compared for a resize or slot change. A param read from a state attribute (`checked`, `open`) is read
+// only at build time, so it does not count: the world already holds that state, and rebuilding mid-move
+// would undo the player's action.
+function sameParams(spec, a, b) {
+  const stateAttrs = new Set(Object.values(spec.state || {}).map(s => s.attr).filter(Boolean));
+  const skip = new Set(Object.entries(spec.params || {}).filter(([, m]) => typeof m === 'object' && stateAttrs.has(m.attr)).map(([k]) => k));
+  const strip = o => JSON.stringify(Object.keys(o || {}).filter(k => !skip.has(k)).sort().map(k => [k, o[k]]));
+  return strip(a) === strip(b);
+}
+
 /* ---------- output -> state logic (pure) ---------- */
 
 const asList = v => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v]);
@@ -216,7 +226,7 @@ function signsFor(text, opts = {}) {
 }
 
 const ui = {
-  compat, coerce, paramsFor, paramAttributes, diffState, Controller, testing, signsFor,
+  compat, coerce, paramsFor, paramAttributes, sameParams, diffState, Controller, testing, signsFor,
   registry: new Map(),
 };
 
@@ -473,15 +483,16 @@ class RedstoneElement extends HTMLElement {
     const root = this.attachShadow({ mode: 'open', delegatesFocus: true });
     // label: an io key puts the text on those signs; 'beside' sets it next to the machine as ordinary page text.
     const beside = spec.label === 'beside';
-    const labelSlot = spec.label && !beside ? '<slot></slot>' : '';
+    // labelSlot names a slot for the sign text, so the default slot can go through an opening (rs-collapse).
+    const labelSlot = spec.label && !beside ? (spec.labelSlot ? `<slot name="${spec.labelSlot}"></slot>` : '<slot></slot>') : '';
     const openings = asList(spec.opening);
     const defaultInWindow = openings.some(o => !o.slot);
     root.innerHTML = `<style>${BASE_CSS}${spec.styles || ''}</style>
       <div class="box rs-own" part="box">
         <div class="stage" part="stage" aria-hidden="true"></div>
-        <div class="label" part="label" aria-hidden="true">${labelSlot}</div>
-        ${openings.map((o, i) => `<div class="window" part="window" data-i="${i}" hidden><slot${o.slot ? ` name="${o.slot}"` : ''}></slot></div>`).join('')}
+        <div class="label" part="label"${spec.readLabel ? '' : ' aria-hidden="true"'}>${labelSlot}</div>
         <div class="controls"></div>
+        ${openings.map((o, i) => `<div class="window" part="window" data-i="${i}" hidden><slot${o.slot ? ` name="${o.slot}"` : ''}></slot></div>`).join('')}
       </div>
       ${beside ? '<span class="caption" part="label"><slot></slot></span>' : ''}
       ${!spec.label && !defaultInWindow ? '<div class="stash"><slot></slot></div>' : ''}
@@ -556,7 +567,7 @@ class RedstoneElement extends HTMLElement {
     queueMicrotask(() => {
       this._rebuildQueued = false;
       if (!this.isConnected || !this._ctl) return;
-      if (onlyIfParamsChanged && JSON.stringify(this._params()) === JSON.stringify(this._ctl.params)) return;
+      if (onlyIfParamsChanged && sameParams(this._def.spec, this._params(), this._ctl.params)) return;
       this._build();
     });
   }
@@ -612,6 +623,8 @@ class RedstoneElement extends HTMLElement {
   _makeControls() {
     const spec = this._def.spec;
     this._controlsEl.innerHTML = '';
+    if (this._hoverOff) this._hoverOff.abort();
+    this._hoverOff = typeof AbortController !== 'undefined' ? new AbortController() : null;
     this._controls = (spec.controls || []).map((c, i) => {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -627,11 +640,26 @@ class RedstoneElement extends HTMLElement {
           this._activate(c, ev.key, ev, k);
         });
       }
+      if (c.hover) this._hover(c, btn);
       this._controlsEl.appendChild(btn);
       return { spec: c, btn, i };
     });
     this._syncNames();
     this._syncDisabled();
+  }
+  // hover: { enter, leave } actions for a control the pointer "stands on": the pointer over the element or focus
+  // inside it (the control, or content shown through an opening) is enter; leaving both is leave. A touch tap is
+  // enter (the tapped button takes focus); tapping elsewhere is leave.
+  _hover(c, btn) {
+    const opt = this._hoverOff ? { signal: this._hoverOff.signal } : undefined;
+    let over = false;
+    const inside = () => over || this.matches(':focus-within');
+    const enter = ev => this._activate(c, null, ev, c.hover.enter);
+    const leave = ev => { if (!inside()) this._activate(c, null, ev, c.hover.leave); };
+    this.addEventListener('pointerenter', ev => { if (ev.pointerType !== 'touch') over = true; enter(ev); }, opt);
+    this.addEventListener('pointerleave', ev => { over = false; if (ev.pointerType !== 'touch') leave(ev); }, opt);
+    this.addEventListener('focusin', enter, opt);
+    this.addEventListener('focusout', ev => { if (!ev.relatedTarget || !this.contains(ev.relatedTarget) && !this.shadowRoot.contains(ev.relatedTarget)) queueMicrotask(() => leave(ev)); }, opt);
   }
   // Positions follow the blocks, so a control on a moved or popped block moves or disappears with it.
   _layout() {
@@ -665,6 +693,9 @@ class RedstoneElement extends HTMLElement {
     return labels.map(l => l.textContent.trim()).join(' ');
   }
   _syncNames() {
+    // labelFallback(el): text shown on the signs when nothing is slotted into labelSlot (a summary attribute).
+    const fallback = this._def.spec.labelFallback && this._labelEl && this._labelEl.querySelector('slot');
+    if (fallback) fallback.textContent = this._def.spec.labelFallback(this);
     const name = this._labelText();
     for (const c of this._controls || []) {
       const label = typeof c.spec.label === 'function' ? c.spec.label(this) : c.spec.label || name;
@@ -726,6 +757,7 @@ class RedstoneElement extends HTMLElement {
         else this.setAttribute(st.attr, String(v));
       }
     });
+    if (spec.host) this._syncHost(spec.host, state);
     for (const c of this._controls || []) {
       for (const [ariaName, key] of Object.entries(c.spec.aria || {})) {
         const v = typeof key === 'function' ? key(state, this) : state[key];
@@ -758,8 +790,25 @@ class RedstoneElement extends HTMLElement {
     }
     if (said.length) this._announce(said.join('. '));
   }
+  // spec.host: { role, aria: { valueNow: key | (state, el) => value } } on the element itself: ElementInternals
+  // (role, ariaValueNow, ...) where supported, else the attributes. null or undefined removes the property.
+  _syncHost(host, state) {
+    const set = (name, v) => {
+      const prop = name === 'role' ? 'role' : 'aria' + name[0].toUpperCase() + name.slice(1);
+      const value = v === null || v === undefined ? null : String(v);
+      if (this._internals && prop in this._internals) this._internals[prop] = value;
+      else {
+        const attr = name === 'role' ? 'role' : 'aria-' + name.toLowerCase();
+        if (value === null) this.removeAttribute(attr);
+        else this.setAttribute(attr, value);
+      }
+    };
+    if (host.role) set('role', typeof host.role === 'function' ? host.role(this) : host.role);
+    for (const [name, key] of Object.entries(host.aria || {})) set(name, typeof key === 'function' ? key(state, this) : state[key]);
+  }
   _fire(type, change) {
-    const init = { bubbles: true, cancelable: type === 'click', composed: type === 'click' || type === 'input' };
+    const st = this._def.spec.state[change.key] || {};
+    const init = { bubbles: true, cancelable: type === 'click' || !!st.cancelable, composed: type === 'click' || type === 'input' };
     const ev = type === 'click' ? new MouseEvent('click', init) : new CustomEvent(type, Object.assign({ detail: { key: change.key, value: change.value, prev: change.prev } }, init));
     SYNTHETIC.add(ev);
     this.dispatchEvent(ev);
@@ -785,7 +834,14 @@ class RedstoneElement extends HTMLElement {
     }
     if (Object.is(ctl.state[key], value)) return;
     ctl.request(key, value);
+    if (this._def.spec.state[key].settle === false) {
+      // A timed output (a toast's timer): let the world run, so its events fire as the output changes.
+      this._awake = true;
+      if (this._view) this._view.draw(performance.now());
+      return;
+    }
     const changes = ctl.settle();
+    this._awake = !ctl.quiet();   // a clock started by the request keeps running
     this._apply(ctl.state, changes, true);
     this._layout();
     if (this._view) this._view.draw(performance.now());
