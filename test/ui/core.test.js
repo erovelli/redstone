@@ -75,6 +75,14 @@ module.exports = {
       const changes = ctl.settle();
       return ctl.state.lit === true && changes.length === 1;
     }),
+    T('Controller.requestSettled: an action refused while the machine is busy is tried again after settling', () => {
+      let tries = 0;
+      const spec = { state: { lit: { read: io => !!io.lamp.lit, set: (hand, io, v) => { tries++; if (tries > 1 && io.lever.on !== v) hand.flip(io.lever); } } } };
+      const ctl = new ui.Controller(spec, C.get('ui-toggle'));
+      ctl.build({});
+      ctl.requestSettled('lit', true);
+      return tries === 2 && ctl.state.lit === true;
+    }),
     T('Controller: read-only state refuses request()', () => {
       const ctl = new ui.Controller({ state: { lit: { read: io => !!io.lamp.lit } } }, C.get('ui-toggle'));
       ctl.build({});

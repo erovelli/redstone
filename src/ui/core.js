@@ -169,6 +169,17 @@ class Controller {
     return this.update();
   }
   quiet() { return compat.quiet(this.world); }
+  // What setting a property does: the player action, then settle. A machine can refuse an action while it is busy
+  // (a button that is still in); then the settled world gets the action once more.
+  requestSettled(key, value, max) {
+    this.request(key, value);
+    let changes = this.settle(max);
+    if (!Object.is(this.state[key], value)) {
+      this.request(key, value);
+      changes = changes.concat(this.settle(max));
+    }
+    return changes;
+  }
 }
 
 /* ---------- helpers for contraption tests (pure) ---------- */
@@ -456,6 +467,11 @@ class RedstoneElement extends HTMLElement {
   set inspect(v) { this.toggleAttribute('inspect', !!v); }
   get form() { return this._internals ? this._internals.form : null; }
   get labels() { return this._internals ? this._internals.labels : []; }
+  get validity() { return this._internals ? this._internals.validity : undefined; }
+  get validationMessage() { return this._internals ? this._internals.validationMessage : ''; }
+  get willValidate() { return this._internals ? this._internals.willValidate : false; }
+  checkValidity() { return this._internals ? this._internals.checkValidity() : true; }
+  reportValidity() { return this._internals ? this._internals.reportValidity() : true; }
   get name() { return this.getAttribute('name') || ''; }
   set name(v) { this.setAttribute('name', v); }
   get label() { return this._labelText(); }
@@ -506,7 +522,8 @@ class RedstoneElement extends HTMLElement {
       root.querySelector('.caption').addEventListener('click', ev => {
         if (SYNTHETIC.has(ev)) return;
         ev.stopPropagation();
-        this._activate(this._primary(), null, ev);
+        const pick = spec.captionControl ? spec.captionControl(this, ev) : null;
+        this._activate(pick || this._primary(), null, ev);
       });
     }
     this._windows = [...root.querySelectorAll('.window')];
@@ -538,11 +555,11 @@ class RedstoneElement extends HTMLElement {
   }
   _params() {
     const ctx = this._ctx();
-    return paramsFor(this._def.entry(), this._def.spec, n => this.getAttribute(n), ctx);
+    return paramsFor(this._def.entry(this), this._def.spec, n => this.getAttribute(n), ctx);
   }
   _build() {
     const def = this._def;
-    const entry = def.entry();
+    const entry = def.entry(this);
     if (!entry) {
       console.error(`${def.tag}: catalogue entry '${def.spec.entry}' is not registered`);
       return;
@@ -593,6 +610,11 @@ class RedstoneElement extends HTMLElement {
     const view = this._view = R.makeView(this._stage, this._ctl.built, { B, T, inspect: this.inspect });
     if (this.inspect) compat.setInspect(view, true);
     this._box.style.setProperty('--b', B + 'px');
+    const cap = this.shadowRoot.querySelector('.caption');
+    if (cap) {
+      cap.style.setProperty('--b', B + 'px');
+      cap.style.setProperty('--t', T + 'px');
+    }
     this._box.style.width = view.W + 'px';
     this._box.style.height = view.H + 'px';
     this._makeControls();
@@ -641,6 +663,7 @@ class RedstoneElement extends HTMLElement {
         });
       }
       if (c.hover) this._hover(c, btn);
+      if (spec.roving) btn.addEventListener('keydown', ev => this._rove(ev, i));
       this._controlsEl.appendChild(btn);
       return { spec: c, btn, i };
     });
@@ -703,6 +726,26 @@ class RedstoneElement extends HTMLElement {
       else c.btn.removeAttribute('aria-label');
     }
   }
+  // A radio group's arrow keys: focus the next (or previous) visible control and operate it, wrapping around.
+  // Auto-repeat is ignored: it would press a button every 30 ms.
+  _rove(ev, i) {
+    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[ev.key];
+    if (!step) return;
+    ev.preventDefault();
+    if (ev.repeat) return;
+    const live = this._controls.filter(c => !c.btn.hidden);
+    const at = live.findIndex(c => c.i === i);
+    const next = live[(at + step + live.length) % live.length];
+    if (!next || next.i === i) return;
+    next.btn.focus();
+    this._activate(next.spec, null, ev);
+  }
+  _tabStops(state) {
+    const at = this._def.spec.roving(state, this);
+    const live = (this._controls || []).filter(c => !c.btn.hidden);
+    const stop = live.find(c => c.i === at) || live[0];
+    for (const c of this._controls || []) c.btn.tabIndex = c === stop ? 0 : -1;
+  }
   _isDisabled() { return this.disabled || !!this._formDisabled; }
   _syncDisabled() {
     const off = this._isDisabled();
@@ -764,6 +807,7 @@ class RedstoneElement extends HTMLElement {
         c.btn.setAttribute('aria-' + ariaName, String(v));
       }
     }
+    if (spec.roving) this._tabStops(state);
     if (this._internals && this._internals.states) {
       for (const [key, v] of Object.entries(state)) {
         if (typeof v !== 'boolean') continue;
@@ -779,6 +823,11 @@ class RedstoneElement extends HTMLElement {
     if (spec.form && this._internals) {
       const v = spec.form.value ? spec.form.value(this) : null;
       this._internals.setFormValue(v === undefined ? null : v);
+      if (spec.form.validity) {
+        const bad = spec.form.validity(this);
+        const anchor = (this._controls || []).map(c => c.btn).find(b => !b.hidden);
+        try { bad ? this._internals.setValidity(bad.flags, bad.message, anchor) : this._internals.setValidity({}); } catch (e) { /* no anchor yet */ }
+      }
     }
     if (silent) return;
     const said = [];
@@ -840,7 +889,12 @@ class RedstoneElement extends HTMLElement {
       if (this._view) this._view.draw(performance.now());
       return;
     }
-    const changes = ctl.settle();
+    let changes = ctl.settle();
+    if (!Object.is(ctl.state[key], value)) {
+      // The machine refused the action while busy (a button still in): it has settled now, so act once more.
+      ctl.request(key, value);
+      changes = changes.concat(ctl.settle());
+    }
     this._awake = !ctl.quiet();   // a clock started by the request keeps running
     this._apply(ctl.state, changes, true);
     this._layout();
@@ -851,7 +905,10 @@ class RedstoneElement extends HTMLElement {
 function define(tag, spec) {
   if (!spec || !spec.entry) throw new Error(`Redstone.ui.define('${tag}'): spec.entry is required`);
   const catalogue = () => Redstone.catalogue || window.Catalogue;
-  const entry = () => (typeof spec.entry === 'string' ? catalogue().get(spec.entry) : spec.entry);
+  const entry = el => {
+    const id = typeof spec.entry === 'function' ? spec.entry(el) : spec.entry;
+    return typeof id === 'string' ? catalogue().get(id) : id;
+  };
   const attrToState = {};
   for (const [key, st] of Object.entries(spec.state || {})) if (st.attr && st.set) attrToState[st.attr] = key;
   const observed = new Set(['disabled', 'inspect', 'aria-label', 'style', 'class', ...paramAttributes(spec), ...Object.keys(attrToState), ...(spec.observe || [])]);

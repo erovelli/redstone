@@ -224,6 +224,42 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-checkbox in a form (validity, reset, label, keyboard, set while the button is in)');
+  {
+    const { page, errors } = await open(browser);
+    const terms = 'rs-checkbox[name="terms"]', news = 'rs-checkbox[name="news"]';
+    await page.locator(terms).scrollIntoViewIfNeeded();
+    check('required and unchecked: invalid, valueMissing', await page.$eval(terms, el => !el.checkValidity() && el.validity.valueMissing && !el.form.checkValidity()));
+    check('starts with news checked in FormData', await page.$eval(news, el => new FormData(el.form).get('news') === 'on' && new FormData(el.form).get('terms') === null));
+    const same = await page.$eval(terms, el => { el.shadowRoot.querySelector('.hit').click(); return el.checked; });
+    check('a click does not change checked directly', same === false);
+    check('checked follows the bulb', await until(page, s => document.querySelector(s).checked === true, terms));
+    check('valid once checked; value submitted', await page.$eval(terms, el => el.checkValidity() && new FormData(el.form).get('terms') === 'yes'));
+    check('role checkbox and aria-checked', await page.$eval(terms, el => { const b = el.shadowRoot.querySelector('.hit'); return b.getAttribute('role') === 'checkbox' && b.getAttribute('aria-checked') === 'true'; }));
+    const ev = await events(page);
+    check('one input and one change', ev.filter(e => e.name === 'terms' && e.type === 'change').length === 1 && ev.filter(e => e.name === 'terms' && e.type === 'input').length === 1, ev);
+    // The button is still in (10 ticks): setting checked must still land, through a second press once it is out.
+    check('el.checked = false right after a press still lands', await page.$eval(terms, el => { el.checked = false; return el.checked === false && !el.contraption.io.bulb.lit; }));
+    await page.locator(news + ' >> .hit').focus();
+    await page.keyboard.press('Space');
+    check('keyboard Space presses the button', await until(page, s => document.querySelector(s).checked === false, news));
+    await page.$eval(news, el => el.form.reset());
+    check('form reset rebuilds from the starting attributes', await until(page, s => document.querySelector(s).checked === true, news));
+    await page.$eval(terms, el => {
+      const l = document.createElement('label');
+      el.id = 'terms-box';
+      l.htmlFor = 'terms-box';
+      l.id = 'terms-label';
+      l.textContent = 'Terms';
+      el.form.appendChild(l);
+    });
+    await page.click('#terms-label');
+    check('a <label for> click presses the button', await until(page, s => document.querySelector(s).checked === true, terms));
+    check('disabled: a click does nothing', await page.$eval('rs-checkbox[name="beta"]', el => { el.click(); return el.shadowRoot.querySelector('.hit').disabled && !el.contraption.io.button.on; }));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });
