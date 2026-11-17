@@ -17,108 +17,12 @@ root.dataset.theme = th.io.lamp.lit ? 'light' : 'dark'; R.readPal();
 const tv = R.makeView($('#theme-stage'), th, { onTick: () => { const want = th.io.lamp.lit ? 'light' : 'dark'; if (root.dataset.theme !== want){ root.dataset.theme = want; try { localStorage.setItem('rs-theme', want); } catch(e){} R.readPal(); refreshPresentation(); } } });
 tv.persistent = true; R.hitAt(tv, 0,0,0, 'Light switch lever', () => { th.io.lever.on = !th.io.lever.on; });
 
-/* main nav: ender pearl launcher */
-const NAV = [['Overview','#/'],['Logic','#/category/toggles-and-logic'],['Flying','#/category/flying-machines'],['Doors','#/category/doors'],['Tests','#/tests'],['Rules','#/rules']];
-const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const launchHint = 'Press a button to launch and teleport.';
-const nav = { L:null, view:null, pads:[], busy:null };
-// The wall shows the label, button, chamber and one row below; it grows to the launcher's full depth while one is in use.
-const OPEN_PHASES = ['revealing','receding','opening','releasing','dropping','launching','flying','withdrawing','refilling'];
-function syncNav(){
-  const b = nav.busy, it = b && nav.L.items[b.i];
-  $('#launch-stage').classList.toggle('open', !!(it && OPEN_PHASES.includes(it.phase)));
-}
-// One block is the same size for the wall, barrels, pistons and slime.
-const navScale = L => Math.max(12, Math.min(48, Math.floor($('#launch').clientWidth / L.cols)));
-// Note block "harp": pitch 0..24 is F#3..F#5, a plucked tone that dies away. Only plays after a click (browser autoplay rules).
-let audio = null;
-function noteBlock(pitch){
-  if (reduceMotion) return;
-  try {
-    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-    const t = audio.currentTime, f = 369.99 * Math.pow(2, (pitch-12)/12), out = audio.createGain();
-    out.gain.setValueAtTime(0, t); out.gain.linearRampToValueAtTime(.18, t+.005); out.gain.exponentialRampToValueAtTime(.0008, t+.9);
-    const tone = audio.createBiquadFilter(); tone.type = 'lowpass'; tone.frequency.value = f*6; tone.connect(out); out.connect(audio.destination);
-    for (const [type, mult, level] of [['triangle',1,1],['sine',2,.35],['sine',3,.12]]){
-      const o = audio.createOscillator(), g = audio.createGain(); o.type = type; o.frequency.value = f*mult; g.gain.value = level;
-      o.connect(g); g.connect(tone); o.start(t); o.stop(t+1);
-    }
-  } catch(e){}
-}
-// Dispenser bucket sounds: scooping water up ('fill', a falling glug) and pouring it back ('empty', a rising splash).
-function bucketSound(kind){
-  if (reduceMotion) return;
-  try {
-    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
-    const t = audio.currentTime, len = kind==='fill' ? .38 : .5, fill = kind==='fill';
-    const buf = audio.createBuffer(1, Math.ceil(audio.sampleRate*len), audio.sampleRate), d = buf.getChannelData(0);
-    for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
-    const src = audio.createBufferSource(); src.buffer = buf;
-    const band = audio.createBiquadFilter(); band.type = 'bandpass'; band.Q.value = fill ? 6 : 2.5;
-    band.frequency.setValueAtTime(fill ? 1400 : 500, t); band.frequency.exponentialRampToValueAtTime(fill ? 350 : 1900, t+len);
-    const g = audio.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(fill ? .5 : .35, t+.03); g.gain.exponentialRampToValueAtTime(.001, t+len);
-    src.connect(band); band.connect(g); g.connect(audio.destination); src.start(t); src.stop(t+len);
-    // a couple of bubbly blips on top of the water noise
-    for (const [at, f0, f1] of fill ? [[0,700,300],[.12,600,250]] : [[.05,220,520],[.2,260,640]]){
-      const o = audio.createOscillator(), og = audio.createGain(); o.type = 'sine';
-      o.frequency.setValueAtTime(f0, t+at); o.frequency.exponentialRampToValueAtTime(f1, t+at+.09);
-      og.gain.setValueAtTime(.0001, t+at); og.gain.linearRampToValueAtTime(.12, t+at+.01); og.gain.exponentialRampToValueAtTime(.0005, t+at+.1);
-      o.connect(og); og.connect(audio.destination); o.start(t+at); o.stop(t+at+.12);
-    }
-  } catch(e){}
-}
-function buildNav(){
-  const st = $('#launch-stage'); st.innerHTML = ''; if (nav.view) R.removeView(nav.view);
-  const L = nav.L || (nav.L = buildHiddenLauncherNav(NAV.length)); if (!L.warm){ L.world.run(4); L.warm = true; }
-  const B = navScale(L);
-  const v = nav.view = R.makeNavView(st, L, { B, overlay:$('#pearl-sky'), onNote:n => noteBlock(n.pitch), onSound:s => bucketSound(s.kind) });
-  v.persistent = true;
-  // Closed, the wall shows its top lip, the labels, the buttons, the chambers with the side launcher's covers, and one row below; open, the launcher rows too.
-  const below = v.front(0, 0, -2).y;
-  st.style.width = v.W+'px'; st.style.setProperty('--closed', below+'px'); st.style.setProperty('--open', v.H+'px'); st.style.setProperty('--b', B+'px');
-  nav.pads = NAV.map(([label,href],i) => {
-    const it = L.items[i], c = v.front(it.xc-1, 0, 2);
-    const a = document.createElement('a'); a.className = 'pad'; a.href = href; a.dataset.i = i;
-    Object.assign(a.style, { left:c.x+'px', top:c.y+'px', width:3*B+'px', height:3*B+'px' });
-    a.innerHTML = `<span>${label}</span>`; a.setAttribute('aria-label', `${label} (presses the button on its ender pearl stasis chamber and launches the pearl)`);
-    st.appendChild(a); return a;
-  });
-  if (nav.busy){ nav.pads.forEach(p=>p.setAttribute('aria-disabled','true')); nav.pads[nav.busy.i].classList.add('launching'); }
-  v.draw(performance.now()); syncNav(); markNav();
-}
-function markNav(){ const h = lastHash || '#/'; nav.pads.forEach((p,i) => { const href = NAV[i][1]; const on = href==='#/' ? h==='#/' : h.startsWith(href); on ? p.setAttribute('aria-current','page') : p.removeAttribute('aria-current'); }); }
-function launch(i){
-  const L = nav.L, it = L.items[i], href = NAV[i][1];
-  if (nav.busy) return;
-  if (reduceMotion){ navigate(href); return; }
-  if (!L.release(it)) return;
-  nav.busy = { i, href };
-  nav.pads.forEach(p => p.setAttribute('aria-disabled','true')); nav.pads[i].classList.add('launching');
-  syncNav(); $('#launch-hint').textContent = `Opening the ${NAV[i][0]} launcher…`;
-}
-function watchLaunch(){
-  const b = nav.busy; if (!b) return;
-  const L = nav.L, it = L.items[b.i], view = nav.view, name = NAV[b.i][0];
-  syncNav();
-  if (b.cancelled || b.landed){ if (L.ready(it)) finishLaunch(b); return; }
-  const phase = L.where(it), p = it.pearl;
-  const hint = ['revealing','receding','opening'].includes(phase) ? `Opening the ${name} launcher…` : phase==='releasing' ? `${name}: draining the stasis chamber…` : phase==='launched' ? `${name}: pearl in flight…` : phase==='launching' ? `Launching ${name}…` : `${name}: dropping onto the slime launcher…`;
-  if ($('#launch-hint').textContent!==hint) $('#launch-hint').textContent = hint;
-  // The pearl lands once its whole sprite has left the viewport.
-  const q = view.screenOf(p);
-  if (phase === 'launched' && (p.gone || q.x+q.r < 0 || q.y+q.r < 0 || q.x-q.r > innerWidth || q.y-q.r > innerHeight)){
-    b.landed = true; p.visible = false;
-    $('#launch-hint').textContent = `Teleported to ${name}.`;
-    b.cancelWarp = terrainScreen();
-    navigate(b.href);
-  }
-}
-function finishLaunch(b){
-  if (nav.busy !== b) return;
-  if (!nav.L.restock(nav.L.items[b.i])){ b.cancelled = true; return; }
-  nav.busy = null; syncNav();
-  nav.pads.forEach(p => { p.removeAttribute('aria-disabled'); p.classList.remove('launching'); }); $('#launch-hint').textContent = launchHint;
-}
+/* main nav: <rs-navbar>, one ender pearl launcher per destination. The workbench routes by hash, so it cancels
+   rs-navigate (fired when the pearl has left the screen), shows the "Downloading terrain" screen and routes. */
+const navbar = $('#launch-bar');
+if (window.Redstone && Redstone.config) Redstone.config.sound = true;
+function markNav(){ const h = lastHash || '#/'; navbar.querySelectorAll('a').forEach(a => { const href = a.getAttribute('href'), on = href==='#/' ? h==='#/' : h.startsWith(href); on ? a.setAttribute('aria-current','page') : a.removeAttribute('aria-current'); }); }
+navbar.addEventListener('rs-navigate', ev => { ev.preventDefault(); terrainScreen(); navigate(ev.detail.link.getAttribute('href')); });
 // The old between-dimensions screen: dark dirt and "Downloading terrain", held for half a second.
 function terrainScreen(){
   const s = $('#terrain'); s.style.backgroundImage = `url("${R.dirtTexture()}")`; s.hidden = false;
@@ -333,7 +237,6 @@ function refreshPresentation(){
   for (const v of R.views) v.draw(performance.now());
 }
 function navigate(h){
-  if (nav.busy && h !== nav.busy.href){ nav.busy.cancelled = true; if (nav.busy.cancelWarp) nav.busy.cancelWarp(); }
   current = h; try { if (location.hash !== h) history.pushState(null, '', h); } catch(e){} route();
 }
 function route(force){
@@ -347,11 +250,11 @@ function route(force){
   else if (kind === 'rules') pageRules();
   else pageHome();
   if (!force) { main.focus({ preventScroll:true }); window.scrollTo(0,0); }
-  if (nav.pads.length) markNav();
+  markNav();
 }
 addEventListener('hashchange', () => { if (location.hash.startsWith('#/')){ navigate(location.hash); } });
 addEventListener('popstate', () => { const h = location.hash || '#/'; if (!h.startsWith('#/')) return; navigate(h); });
-document.addEventListener('click', ev => { if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return; const pad = ev.target.closest && ev.target.closest('a.pad'); if (pad){ ev.preventDefault(); launch(+pad.dataset.i); return; } const a = ev.target.closest && ev.target.closest('a[href^="#/"]'); if (!a) return; ev.preventDefault(); navigate(a.getAttribute('href')); });
+document.addEventListener('click', ev => { if (ev.defaultPrevented || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return; const a = ev.target.closest && ev.target.closest('a[href^="#/"]'); if (!a) return; ev.preventDefault(); navigate(a.getAttribute('href')); });
 addEventListener('keydown', ev => { if (!bench || ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)) return;
   if (ev.key === ' ' && document.activeElement.tagName !== 'BUTTON'){ ev.preventDefault(); bench.setPaused(!bench.paused); }
   if (ev.key === '.' && bench.paused) tickView(bench.view);
@@ -361,13 +264,11 @@ addEventListener('keydown', ev => { if (!bench || ['INPUT','SELECT','TEXTAREA'].
 function tickView(v){ v.world.tick(); if (v.onTick) v.onTick(); R.markTick(); v.draw(performance.now()); }
 let last = performance.now(), themeAcc = 0;
 setInterval(() => { const now = performance.now(), dt = now - last; last = now;
-  themeAcc += dt; while (themeAcc >= 100){ themeAcc -= 100; tickView(tv); if (nav.view) tickView(nav.view); watchLaunch(); }
+  themeAcc += dt; while (themeAcc >= 100){ themeAcc -= 100; tickView(tv); }
   if (bench && bench.view && !bench.paused){ bench.acc += dt * bench.speed; let n = 0; while (bench.acc >= 100 && n++ < 8){ bench.acc -= 100; tickView(bench.view); } }
 }, 25);
 const frame = now => { for (const v of R.views) if (v.anim) v.draw(now); requestAnimationFrame(frame); };
 requestAnimationFrame(frame);
-buildSide(); route(); buildNav();
-// Rebuild the wall when its width changes the block size (also covers a tab first laid out while hidden).
-new ResizeObserver(() => { if (nav.view && navScale(nav.L) !== nav.view.B) buildNav(); }).observe($('#launch'));
-let lw = innerWidth; addEventListener('resize', () => { clearTimeout(window.__rz); window.__rz = setTimeout(() => { if (innerWidth !== lw){ lw = innerWidth; refreshPresentation(); buildNav(); } }, 250); });
+buildSide(); route();
+let lw = innerWidth; addEventListener('resize', () => { clearTimeout(window.__rz); window.__rz = setTimeout(() => { if (innerWidth !== lw){ lw = innerWidth; refreshPresentation(); } }, 250); });
 })();
