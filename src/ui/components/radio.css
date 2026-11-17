@@ -1,0 +1,10 @@
+/* rs-radio: before the element upgrades, the options are a plain list beside the space the latch bank takes
+   (five blocks wide; three rows of depth per option). */
+rs-radio:not(:defined) {
+  display: inline-flex;
+  flex-direction: column;
+  vertical-align: middle;
+  box-sizing: border-box;
+  padding-left: calc(var(--rs-block, 24px) * 5.4);
+  line-height: calc(var(--rs-block, 24px) * 2.16);
+}

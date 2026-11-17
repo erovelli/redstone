@@ -260,6 +260,48 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-radio (latch bank, roving focus, caption clicks, form)');
+  {
+    const { page, errors } = await open(browser);
+    const size = 'rs-radio[name="size"]', day = 'rs-radio[name="day"]';
+    await page.locator(size).scrollIntoViewIfNeeded();
+    check('starts at its value attribute; FormData has it', await page.$eval(size, el => el.value === 'm' && new FormData(el.form).get('size') === 'm'));
+    check('required and unchosen: valueMissing', await page.$eval(day, el => el.value === '' && el.validity.valueMissing));
+    check('one tab stop: the chosen option', await page.$eval(size, el => [...el.shadowRoot.querySelectorAll('.hit')].map(b => b.tabIndex).join() === '-1,0,-1,-1,-1,-1'));
+    check('extra controls hidden; three radios named by option', await page.$eval(size, el => {
+      const b = [...el.shadowRoot.querySelectorAll('.hit')].filter(x => !x.hidden);
+      return b.length === 3 && b.every(x => x.getAttribute('role') === 'radio') && b[2].getAttribute('aria-label') === 'Large';
+    }));
+    const same = await page.$eval(size, el => { el.shadowRoot.querySelectorAll('.hit')[2].click(); return el.value; });
+    check('a click does not change value directly', same === 'm');
+    check('value follows the latches', await until(page, s => document.querySelector(s).value === 'l', size));
+    let ev = await events(page);
+    check('one input and one change', ev.filter(e => e.type === 'change' && e.name === 'size').length === 1 && ev.filter(e => e.type === 'input' && e.name === 'size').length === 1, ev);
+    check('exactly one lamp lit, aria-checked on Large', await until(page, s => document.querySelector(s).contraption.io.lamps.filter(l => l.lit).length === 1, size) && await page.$eval(size, el => el.contraption.io.lamps.filter(l => l.lit).length === 1 && el.shadowRoot.querySelectorAll('.hit')[2].getAttribute('aria-checked') === 'true'));
+    await page.locator(size + ' >> .hit >> nth=2').focus();
+    await page.keyboard.press('ArrowDown');
+    check('ArrowDown wraps to the first option, focuses and chooses it', await until(page, s => document.querySelector(s).value === 's', size) &&
+      await page.$eval(size, el => el.shadowRoot.activeElement === el.shadowRoot.querySelectorAll('.hit')[0]));
+    await page.keyboard.press('ArrowUp');
+    check('ArrowUp wraps back to the last', await until(page, s => document.querySelector(s).value === 'l', size));
+    await page.locator(size).getByText('Medium').click();
+    check('clicking an option label chooses that option', await until(page, s => document.querySelector(s).value === 'm', size));
+    // Two clicks a tick apart: the second wins.
+    await page.$eval(day, el => { const b = el.shadowRoot.querySelectorAll('.hit'); b[0].click(); setTimeout(() => b[5].click(), 110); });
+    check('a second click before the first settles wins', await until(page, s => document.querySelector(s).value === 'Sat', day));
+    await page.waitForTimeout(800);
+    check('and only its lamp is lit', await page.$eval(day, el => el.value === 'Sat' && el.contraption.io.lamps.filter(l => l.lit).length === 1));
+    check('el.value = "Tue" settles at once', await page.$eval(day, el => { el.value = 'Tue'; return el.value === 'Tue' && el.contraption.io.lamps[1].lit; }));
+    await page.$eval(day, el => el.form.reset());
+    check('form reset returns both groups to their starting attributes', await until(page, s => { const [a, b] = document.querySelectorAll(s); return a.value === 'm' && b.value === ''; }, 'rs-radio'));
+    await page.$eval(size, el => el.setAttribute('disabled', ''));
+    await page.$eval(size, el => el.shadowRoot.querySelectorAll('.hit')[0].click());
+    await page.waitForTimeout(700);
+    check('disabled: no presses', await page.$eval(size, el => el.value === 'm' && !el.contraption.io.buttons.some(b => b.on)));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });
