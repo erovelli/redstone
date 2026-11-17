@@ -22,12 +22,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Test every catalogue entry
-        run: node test/run.js
-      - name: Build single-file pages
-        run: |
-          python3 build.py
-          cp dist/catalogue.html dist/index.html
+      - name: Test the engine, every catalogue entry and the UI suites
+        run: npm test
+      - name: Build the library, the docs and the workbench
+        run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

@@ -1,0 +1,972 @@
+// Redstone UI core: the custom-element base every <rs-*> component is built on.
+//
+// A component file calls Redstone.ui.define(tag, spec). The spec says which catalogue entry to build,
+// how attributes map to its params, which blocks the player can use (and with which world.hand action),
+// how outputs map to properties, attributes and events, and where light-DOM content sits. This file does
+// everything else: shadow root, view, one shared ticker, sleeping, resize, inspect mode, reduced motion,
+// sound, focusable controls, ARIA, live announcements, form participation and teardown.
+//
+// The central rule: an input is a player action through world.hand. Properties, attributes and events change
+// only when the contraption's OUTPUT changes, never directly from an input handler.
+//
+// The pure parts (param mapping, the headless Controller, test helpers) also run in Node; see docs/COMPONENTS.md.
+(function () {
+'use strict';
+const IN_NODE = typeof module !== 'undefined' && module.exports;
+const HAS_DOM = typeof window !== 'undefined' && typeof document !== 'undefined' && typeof HTMLElement !== 'undefined';
+const RSR = () => (typeof window !== 'undefined' ? window.RSR : null);
+
+/* =====================================================================================================
+ * COMPATIBILITY SECTION
+ * Fallbacks for engine and renderer APIs from docs/SPEC.md 5.1 and 5.3 that may not exist yet.
+ * Everything here goes away once the new engine (world.hand, settle, quiet, hash, on, RS.blocks) and the
+ * new renderer (view.rectOf, view.setInspect, per-view clocks) are merged. Nothing outside this section
+ * checks for a missing API.
+ * ===================================================================================================== */
+const compat = (() => {
+  const hands = new WeakMap();
+  const listeners = new WeakMap();
+  const lastSig = new WeakMap();
+
+  // Legacy worlds have no event bus: keep listeners here and let the hand shim emit sounds.
+  function emit(world, type, ev) {
+    const map = listeners.get(world);
+    const list = map && map[type];
+    if (list) for (const fn of list) fn(ev);
+  }
+  function on(world, type, fn) {
+    if (typeof world.on === 'function') return world.on(type, fn);
+    let map = listeners.get(world);
+    if (!map) listeners.set(world, (map = {}));
+    (map[type] = map[type] || []).push(fn);
+  }
+
+  // world.hand: player actions. The shim covers what the reference components use.
+  function hand(world) {
+    if (world.hand) return world.hand;
+    let h = hands.get(world);
+    if (h) return h;
+    const shake = (b, what) => {
+      if (typeof world.vibrate === 'function') world.vibrate(b.x, b.y, b.z, what);
+      emit(world, 'sound', { name: 'click', x: b.x, y: b.y, z: b.z });
+    };
+    h = {
+      flip(b) {
+        b.on = !b.on;
+        shake(b, 'lever');
+        return true;
+      },
+      press(b) {
+        if (b.on) return false;
+        b.on = true;
+        shake(b, 'button');
+        world.at(world.t + (b.wood ? 15 : 10), () => { b.on = false; });
+        return true;
+      },
+      step(b, standing) {
+        b.on = !!standing;
+        return true;
+      },
+    };
+    hands.set(world, h);
+    return h;
+  }
+
+  function signature(world) {
+    let s = '';
+    for (const b of world.c.values()) {
+      s += `${b.t}${b.x},${b.y},${b.z}:${b.d || ''}${b.on ? 1 : 0}${b.lit ? 1 : 0}${b.ext ? 1 : 0}${b.open ? 1 : 0}${b.lvl || 0}/${b.out || 0};`;
+    }
+    for (const e of world.entities || []) if (!e.gone) s += `e${e.x},${e.y},${e.z};`;
+    return s;
+  }
+
+  // world.quiet: nothing changed last tick and nothing is scheduled. Call once per tick.
+  function quiet(world) {
+    if ('quiet' in world) return !!world.quiet;
+    const sig = signature(world);
+    const same = lastSig.get(world) === sig;
+    lastSig.set(world, sig);
+    return same && world.ev.length === 0 && !(world.vibs && world.vibs.length);
+  }
+
+  // world.settle(max): run until quiet. Throws if the world never settles.
+  function settle(world, max = 400) {
+    if (typeof world.settle === 'function') return world.settle(max);
+    for (let i = 1; i <= max; i++) {
+      world.tick();
+      if (quiet(world)) return i;
+    }
+    throw new Error(`world did not settle within ${max} ticks`);
+  }
+
+  // world.hash(): deterministic state signature.
+  function hash(world) {
+    if (typeof world.hash === 'function') return world.hash();
+    const rows = [];
+    for (const b of world.c.values()) {
+      rows.push([b.t, b.x, b.y, b.z, b.d || '', b.att || '', b.on ? 1 : 0, b.lit ? 1 : 0, b.ext ? 1 : 0, b.open ? 1 : 0, b.s ? 1 : 0, b.lvl || 0, b.out || 0, b.delay || 0, b.mode || ''].join('|'));
+    }
+    return rows.sort().join(';');
+  }
+
+  // RS.blocks: the block registry. Until it exists, the SPEC 5.2 palette is the list of real blocks.
+  const PALETTE = new Set(('stone bricks planks smooth_stone iron quartz wool concrete glass terracotta obsidian slime honey rblock lamp bulb ' +
+    'target noteblock jukebox barrel furnace chest dispenser dropper hopper lectern bookshelf bell sign piston head observer dust torch ' +
+    'repeater comparator lever button plate door trapdoor gate daylight sculk soulsand magma water').split(' '));
+  function isRealBlock(RS, type) {
+    if (RS && RS.blocks) return !!RS.blocks[type] && !RS.blocks[type].fake;
+    return PALETTE.has(type);
+  }
+
+  // view.rectOf(block | [x,y,z], face) -> { x, y, w, h } in CSS px inside the stage.
+  function rectOf(view, at, face = 'front') {
+    if (typeof view.rectOf === 'function') return view.rectOf(at, face);
+    const [x, y, z] = Array.isArray(at) ? at : [at.x, at.y, at.z];
+    const B = view.B, T = view.T;
+    const f = view.front(x, y, z);
+    if (face === 'top') return { x: f.x, y: f.y - T, w: B, h: T };
+    // Assumption for the new renderer: rectOf(sign, 'front') is the sign board. A wall sign is a board
+    // 8/16 tall, 2/16 thick, against the block it hangs on (so 14/16 of a block back in its own cell).
+    if (!Array.isArray(at) && at.t === 'sign') return { x: f.x, y: f.y - T * 14 / 16 + B * 3.5 / 16, w: B, h: B * 8 / 16 };
+    return { x: f.x, y: f.y, w: B, h: B };
+  }
+
+  // Inspect (x-ray) mode: ghost the covering blocks so the wiring shows.
+  const COVER = new Set(['stone', 'bricks', 'planks', 'smooth_stone', 'iron', 'quartz', 'wool', 'concrete', 'obsidian', 'noteblock', 'jukebox', 'barrel', 'wall', 'wallb', 'ground']);
+  function setInspect(view, on) {
+    if (typeof view.setInspect === 'function') return view.setInspect(on);
+    view.ghost = on ? (b => COVER.has(b.t)) : null;
+  }
+
+  // The legacy renderer interpolates against one global tick clock.
+  function markTick() {
+    const R = RSR();
+    if (R && typeof R.markTick === 'function') R.markTick();
+  }
+
+  // The legacy renderer keeps a global list of views.
+  function removeView(view) {
+    const R = RSR();
+    if (R && typeof R.removeView === 'function') R.removeView(view);
+  }
+
+  return { hand, settle, quiet, hash, on, emit, isRealBlock, rectOf, setInspect, markTick, removeView };
+})();
+/* ============================== END OF COMPATIBILITY SECTION ============================== */
+
+
+/* ---------- attribute -> param mapping (pure) ---------- */
+
+// Coerce an attribute value (string or null) for a param. `def` is the catalogue param definition
+// ({ key, min, max, def, options }) or a mapping's own { type, def, min, max, options }.
+function coerce(def, raw) {
+  const type = typeOf(def);
+  if (type === 'boolean') return raw !== null && raw !== undefined && raw !== 'false';
+  if (raw === null || raw === undefined) return def ? def.def : undefined;
+  if (type === 'number') {
+    let n = Number(raw);
+    if (!Number.isFinite(n)) return def.def;
+    if (Number.isInteger(def.def) || Number.isInteger(def.min)) n = Math.round(n);
+    if (def.min !== undefined) n = Math.max(def.min, n);
+    if (def.max !== undefined) n = Math.min(def.max, n);
+    return n;
+  }
+  if (def && def.options) return def.options.includes(raw) ? raw : def.def;
+  return String(raw);
+}
+function typeOf(def) {
+  if (!def) return 'string';
+  if (def.type) return def.type === Boolean ? 'boolean' : def.type === Number ? 'number' : def.type === String ? 'string' : def.type;
+  if (typeof def.def === 'boolean' || (def.options && def.options.every(o => typeof o === 'boolean'))) return 'boolean';
+  if (typeof def.def === 'number' || def.min !== undefined) return 'number';
+  return 'string';
+}
+
+// The catalogue defaults, then every mapped param. `attr(name)` returns the attribute value or null;
+// `ctx` is passed to computed params.
+function paramsFor(entry, spec, attr, ctx) {
+  const out = {};
+  for (const p of entry.params || []) out[p.key] = p.def;
+  for (const [key, m] of Object.entries(spec.params || {})) {
+    if (typeof m === 'function') {
+      const v = m(ctx && ctx.el, ctx);
+      if (v !== undefined) out[key] = v;
+      continue;
+    }
+    const map = typeof m === 'string' ? { attr: m } : m;
+    const def = Object.assign({}, (entry.params || []).find(p => p.key === key), map.type || map.def !== undefined ? map : {});
+    out[key] = coerce(def, attr(map.attr || key));
+  }
+  return out;
+}
+
+// Attribute names that rebuild the contraption when they change (not the ones that mirror state).
+function paramAttributes(spec) {
+  const stateAttrs = new Set(Object.values(spec.state || {}).map(s => s.attr).filter(Boolean));
+  const out = [];
+  for (const [key, m] of Object.entries(spec.params || {})) {
+    if (typeof m === 'function') continue;
+    const name = typeof m === 'string' ? m : (m.attr || key);
+    if (!stateAttrs.has(name)) out.push(name);
+  }
+  return out;
+}
+
+/* ---------- output -> state logic (pure) ---------- */
+
+const asList = v => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v]);
+
+// Compare two state snapshots. Returns [{ key, value, prev, events: [type] }] for every key that changed.
+function diffState(stateSpec, prev, next) {
+  const changes = [];
+  for (const [key, s] of Object.entries(stateSpec || {})) {
+    if (Object.is(prev[key], next[key])) continue;
+    const when = s.when || 'change';
+    const fires = when === 'change' || (when === 'rise' && next[key] && !prev[key]) || (when === 'fall' && !next[key] && prev[key]);
+    changes.push({ key, value: next[key], prev: prev[key], events: fires ? asList(s.event) : [] });
+  }
+  return changes;
+}
+
+// The headless half of a component: builds the contraption, applies player actions, ticks, and turns
+// output changes into state changes. The custom element wraps one; tests drive one directly.
+class Controller {
+  constructor(spec, entry) {
+    this.spec = spec;
+    this.entry = entry;
+    this.built = null;
+    this.state = {};
+  }
+  get world() { return this.built && this.built.world; }
+  get io() { return this.built && this.built.io; }
+  get hand() { return compat.hand(this.world); }
+  build(params) {
+    this.params = params;
+    this.built = this.entry.build(params);
+    // A strict builder writes its steady state; settling proves it and costs nothing when it holds.
+    try { compat.settle(this.world, 400); } catch (e) { /* a clock never settles: start it running */ }
+    this.state = this.read();
+    return this.built;
+  }
+  read() {
+    const s = {};
+    for (const [key, st] of Object.entries(this.spec.state || {})) s[key] = st.read(this.io, this.built);
+    return s;
+  }
+  // A player action from a control: hand[act](io[control.io]) or act(hand, io, built, key).
+  act(control, key) {
+    const target = control.io ? this.io[control.io] : null;
+    if (typeof control.act === 'function') return control.act(this.hand, this.io, this.built, key);
+    const fn = this.hand[control.act];
+    if (typeof fn !== 'function') throw new Error(`world.hand has no action '${control.act}'`);
+    return fn.call(this.hand, target);
+  }
+  // Ask for a state value the way the page asks: through the state's set() player action.
+  request(key, value) {
+    const st = this.spec.state[key];
+    if (!st || typeof st.set !== 'function') throw new Error(`state '${key}' is read-only`);
+    st.set(this.hand, this.io, value, this.built);
+  }
+  update() {
+    const next = this.read();
+    const changes = diffState(this.spec.state, this.state, next);
+    this.state = next;
+    return changes;
+  }
+  tick() {
+    this.world.tick();
+    return this.update();
+  }
+  settle(max) {
+    try { compat.settle(this.world, max); } catch (e) { /* keep what happened so far */ }
+    return this.update();
+  }
+  quiet() { return compat.quiet(this.world); }
+}
+
+/* ---------- helpers for contraption tests (pure) ---------- */
+
+const testing = {
+  hand: w => compat.hand(w),
+  hash: w => compat.hash(w),
+  settle: (w, max) => compat.settle(w, max),
+  // Every combination of each param's min, default and max (or every option).
+  edges(entry) {
+    return (entry.params || []).reduce((acc, p) => acc.flatMap(a => [...new Set(p.options || [p.min, p.def, p.max])].map(v => Object.assign({}, a, { [p.key]: v }))), [{}]);
+  },
+  // Ticks until f() holds, counting the first tick as 1; -1 if it never does within max.
+  ticksUntil(world, f, max = 200) {
+    for (let i = 1; i <= max; i++) {
+      world.tick();
+      if (f()) return i;
+    }
+    return -1;
+  },
+  // The built steady state does not drift: n ticks change nothing.
+  noDrift(world, n = 100) {
+    const h0 = compat.hash(world);
+    for (let i = 0; i < n; i++) {
+      world.tick();
+      if (compat.hash(world) !== h0) return false;
+    }
+    return true;
+  },
+  // R1 and R2 as far as a test can see them: real blocks only, no wiring links, nothing hidden by fiat.
+  strictWorld(world, RS) {
+    for (const b of world.c.values()) {
+      if (!compat.isRealBlock(RS, b.t)) throw new Error(`not a real block: ${b.t} at ${b.x},${b.y},${b.z}`);
+      if (b.buried || b.feed) throw new Error(`hidden or feed flag on ${b.t} at ${b.x},${b.y},${b.z}`);
+    }
+    if (world.floor && world.floor.length) throw new Error('world.floor wiring links are not allowed');
+    return true;
+  },
+  // Push limit by construction: every piston's possible structure is within 12 blocks.
+  pistonCount(world) {
+    let n = 0;
+    for (const b of world.c.values()) if (b.t === 'piston') n++;
+    return n;
+  },
+};
+
+// How many sign blocks a label needs. One block holds about 4 characters at the sign font (0.4 of a block).
+function signsFor(text, opts = {}) {
+  const min = opts.min === undefined ? 1 : opts.min;
+  const max = opts.max === undefined ? 6 : opts.max;
+  const t = String(text || '').trim();
+  if (!t) return min;
+  const width = typeof opts.measure === 'function' ? opts.measure(t) : t.length * 0.24;   // in blocks
+  return Math.max(min, Math.min(max, Math.ceil(width + 0.25)));   // a little margin at each end
+}
+
+const ui = {
+  compat, coerce, paramsFor, paramAttributes, diffState, Controller, testing, signsFor,
+  registry: new Map(),
+};
+
+if (IN_NODE) module.exports = ui;
+if (!HAS_DOM) return;
+
+/* ===================================================================================================
+ * Browser: the custom element base
+ * =================================================================================================== */
+
+const Redstone = window.Redstone = window.Redstone || {};
+Redstone.config = Object.assign({ sound: false }, Redstone.config);
+Redstone.engine = Redstone.engine || window.RS;
+Redstone.catalogue = Redstone.catalogue || window.Catalogue;
+Redstone.render = Redstone.render || window.RSR;
+Redstone.textures = Redstone.textures || window.RSTextures || null;
+Redstone.ui = Object.assign(Redstone.ui || {}, ui);
+
+const reducedMotion = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const SYNTHETIC = new WeakSet();
+
+/* ---------- one shared ticker for the whole page ---------- */
+const ticker = {
+  members: new Set(),
+  timer: null,
+  frame: 0,
+  add(el) {
+    this.members.add(el);
+    if (!this.timer) this.timer = setInterval(() => this.tick(), 100);
+  },
+  remove(el) {
+    this.members.delete(el);
+    if (!this.members.size && this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  },
+  tick() {
+    let any = false;
+    for (const el of this.members) if (el._awake && el._visible) { any = true; break; }
+    if (!any) return;
+    compat.markTick();
+    for (const el of this.members) if (el._awake && el._visible) el._tick();
+    this.animate();
+  },
+  // Draw in-between frames (a piston stroke) only while some view is mid-move.
+  animate() {
+    if (this.frame) return;
+    const step = now => {
+      this.frame = 0;
+      let more = false;
+      for (const el of this.members) {
+        const v = el._view;
+        if (v && v.anim && el._visible) {
+          v.draw(now);
+          more = more || v.anim;
+        }
+      }
+      if (more) this.frame = requestAnimationFrame(step);
+    };
+    this.frame = requestAnimationFrame(step);
+  },
+};
+
+const seen = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver(entries => {
+  for (const e of entries) {
+    const el = e.target;
+    el._visible = e.isIntersecting;
+    if (el._visible && el._view) el._view.draw(performance.now());
+  }
+}, { rootMargin: '120px' }) : null;
+
+/* ---------- block sound (synthesised, opt-in) ---------- */
+let audio = null;
+function playSound(ev) {
+  if (!Redstone.config.sound || reducedMotion()) return;
+  if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    const t = audio.currentTime;
+    const out = audio.createGain();
+    out.connect(audio.destination);
+    const name = ev && ev.name || 'click';
+    if (name === 'note') {
+      const f = 369.99 * Math.pow(2, ((ev.pitch || 12) - 12) / 12);
+      out.gain.setValueAtTime(0.16, t);
+      out.gain.exponentialRampToValueAtTime(0.0008, t + 0.8);
+      const o = audio.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = f;
+      o.connect(out);
+      o.start(t);
+      o.stop(t + 0.85);
+      return;
+    }
+    // click (lever, button) and piston: a filtered noise burst; a piston is longer and lower.
+    const piston = name === 'piston';
+    const len = piston ? 0.16 : 0.035;
+    const buf = audio.createBuffer(1, Math.ceil(audio.sampleRate * len), audio.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const src = audio.createBufferSource();
+    src.buffer = buf;
+    const band = audio.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = piston ? 420 : 2400;
+    band.Q.value = piston ? 0.9 : 3;
+    out.gain.value = piston ? 0.5 : 0.35;
+    src.connect(band);
+    band.connect(out);
+    src.start(t);
+  } catch (e) { /* no audio: stay silent */ }
+}
+
+/* ---------- shadow DOM ---------- */
+const BASE_CSS = `
+:host { display: inline-block; vertical-align: middle; position: relative; max-width: 100%; line-height: 0; }
+:host([hidden]) { display: none; }
+:host([disabled]) .box { filter: saturate(.35) brightness(.92); }
+.box { position: relative; }
+.stage { position: relative; }
+.stage canvas { position: absolute; left: 0; top: 0; image-rendering: pixelated; pointer-events: none; }
+.label { position: absolute; z-index: 2; display: flex; align-items: center; justify-content: center; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis; pointer-events: none; color: var(--rs-sign-ink, #1b120a);
+  font: 500 calc(var(--b) * .4)/1 var(--rs-sign-font, ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace); letter-spacing: 0; }
+.label[hidden], .window[hidden] { display: none; }
+.window { position: absolute; z-index: 3; overflow: auto; line-height: normal; background: var(--rs-window-bg, Canvas); color: var(--rs-window-ink, CanvasText); }
+.hit { position: absolute; z-index: 4; margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 0; font: inherit; color: inherit; }
+.hit:disabled { cursor: not-allowed; }
+.hit:hover:not(:disabled) { outline: 2px solid var(--rs-hover, rgba(255, 255, 255, .55)); outline-offset: -2px; }
+.hit:focus { outline: none; }
+.hit:focus-visible { outline: 2px dashed var(--rs-focus, currentColor); outline-offset: 2px; }
+.stash { display: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+`;
+
+function blockSize(el) {
+  const raw = getComputedStyle(el).getPropertyValue('--rs-block').trim();
+  const n = parseFloat(raw);
+  return Math.max(12, Math.min(48, Number.isFinite(n) ? n : 24));
+}
+
+// Union of rects.
+function union(rects) {
+  if (!rects.length) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const r of rects) {
+    x0 = Math.min(x0, r.x);
+    y0 = Math.min(y0, r.y);
+    x1 = Math.max(x1, r.x + r.w);
+    y1 = Math.max(y1, r.y + r.h);
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+const place = (node, r) => Object.assign(node.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
+const blocksOf = v => asList(v).filter(Boolean);
+
+class RedstoneElement extends HTMLElement {
+  static get formAssociated() { return true; }
+
+  constructor() {
+    super();
+    this._def = this.constructor._def;
+    this._visible = true;
+    this._awake = false;
+    this._view = null;
+    this._ctl = null;
+    try { this._internals = this.attachInternals(); } catch (e) { this._internals = null; }
+    // A click that lands on the element itself (a <label for>, el.click()) operates the primary control.
+    // The raw click never reaches page listeners: a component's own events come from its output.
+    this.addEventListener('click', ev => {
+      if (SYNTHETIC.has(ev) || ev.composedPath()[0] !== this) return;
+      ev.stopImmediatePropagation();
+      this._activate(this._primary(), null, ev);
+    }, true);
+  }
+
+  /* ----- lifecycle ----- */
+  connectedCallback() {
+    if (!this.shadowRoot) this._render();
+    if (!this._defaults) this._defaults = this._stateAttrs();
+    this._build();
+    ticker.add(this);
+    if (seen) seen.observe(this);
+    if (typeof ResizeObserver !== 'undefined') {
+      this._ro = new ResizeObserver(() => this._resized());
+      this._ro.observe(this.parentElement || document.documentElement);
+    }
+    // Sign sizes are measured in the sign font; measure again once web fonts have loaded.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this._scheduleRebuild(true));
+  }
+  disconnectedCallback() {
+    ticker.remove(this);
+    if (seen) seen.unobserve(this);
+    if (this._ro) this._ro.disconnect();
+    this._ro = null;
+    this._teardownView();
+    this._ctl = null;
+    this._awake = false;
+  }
+  attributeChangedCallback(name, old, value) {
+    if (this._reflecting || old === value || !this._ctl) return;
+    if (name === 'disabled') return this._syncDisabled();
+    if (name === 'inspect') return this._view && (compat.setInspect(this._view, this.inspect), this._view.draw(performance.now()));
+    if (name === 'aria-label') return this._syncNames();
+    if (name === 'style' || name === 'class') return this._resized();   // --rs-block may have changed
+    const key = this._def.attrToState[name];
+    if (key) {
+      const st = this._def.spec.state[key];
+      this[key] = coerce({ type: typeof this._ctl.state[key] === 'boolean' ? 'boolean' : st.type || 'string' }, value);
+      return;
+    }
+    this._scheduleRebuild();
+  }
+
+  /* ----- public surface ----- */
+  get contraption() {
+    const c = this._ctl;
+    return c ? { world: c.world, io: c.io, entry: c.entry, built: c.built, view: this._view, state: Object.assign({}, c.state) } : null;
+  }
+  get disabled() { return this.hasAttribute('disabled'); }
+  set disabled(v) { this.toggleAttribute('disabled', !!v); }
+  get inspect() { return this.hasAttribute('inspect'); }
+  set inspect(v) { this.toggleAttribute('inspect', !!v); }
+  get form() { return this._internals ? this._internals.form : null; }
+  get labels() { return this._internals ? this._internals.labels : []; }
+  get name() { return this.getAttribute('name') || ''; }
+  set name(v) { this.setAttribute('name', v); }
+  get label() { return this._labelText(); }
+  // Re-read --rs-block and the container width after a change the element cannot observe (an ancestor's CSS).
+  refresh() { this._resized(); }
+
+  formDisabledCallback(disabled) {
+    this._formDisabled = disabled;
+    this._syncDisabled();
+  }
+  // Reset: rebuild a fresh world from the attributes the element started with.
+  formResetCallback() {
+    this._reflect(() => {
+      for (const [name, val] of Object.entries(this._defaults || {})) {
+        if (val === null) this.removeAttribute(name);
+        else this.setAttribute(name, val);
+      }
+    });
+    if (this.isConnected) this._build();
+  }
+
+  /* ----- shadow root ----- */
+  _render() {
+    const spec = this._def.spec;
+    const root = this.attachShadow({ mode: 'open', delegatesFocus: true });
+    const labelSlot = spec.label ? '<slot></slot>' : '';
+    const openings = asList(spec.opening);
+    const defaultInWindow = openings.some(o => !o.slot);
+    root.innerHTML = `<style>${BASE_CSS}${spec.styles || ''}</style>
+      <div class="box rs-own" part="box">
+        <div class="stage" part="stage" aria-hidden="true"></div>
+        <div class="label" part="label" aria-hidden="true">${labelSlot}</div>
+        ${openings.map((o, i) => `<div class="window" part="window" data-i="${i}" hidden><slot${o.slot ? ` name="${o.slot}"` : ''}></slot></div>`).join('')}
+        <div class="controls"></div>
+      </div>
+      ${!spec.label && !defaultInWindow ? '<div class="stash"><slot></slot></div>' : ''}
+      <span class="sr" aria-live="polite"></span>`;
+    this._box = root.querySelector('.box');
+    this._stage = root.querySelector('.stage');
+    this._labelEl = root.querySelector('.label');
+    this._windows = [...root.querySelectorAll('.window')];
+    this._controlsEl = root.querySelector('.controls');
+    this._live = root.querySelector('.sr');
+    // Raw clicks on the machine itself stay inside; clicks on content shown through an opening do not.
+    root.addEventListener('click', ev => {
+      if (SYNTHETIC.has(ev)) return;
+      if (ev.composedPath().some(n => n.classList && n.classList.contains('rs-own'))) ev.stopPropagation();
+    });
+    root.addEventListener('slotchange', () => {
+      this._syncNames();
+      if (this._ctl) this._scheduleRebuild(true);
+    });
+  }
+
+  /* ----- build and view ----- */
+  _ctx() {
+    const el = this;
+    const text = this._labelText(true);
+    const font = getComputedStyle(this).getPropertyValue('--rs-sign-font').trim() || 'ui-monospace, Menlo, Consolas, monospace';
+    let cv = null;
+    const measure = t => {
+      cv = cv || document.createElement('canvas').getContext('2d');
+      cv.font = `500 40px ${font}`;
+      return cv.measureText(t).width / 100;   // in blocks: the font is 0.4 of a block
+    };
+    return { el, B: blockSize(this), text, measure, signsFor: (t, o) => signsFor(t, Object.assign({ measure }, o)) };
+  }
+  _params() {
+    const ctx = this._ctx();
+    return paramsFor(this._def.entry(), this._def.spec, n => this.getAttribute(n), ctx);
+  }
+  _build() {
+    const def = this._def;
+    const entry = def.entry();
+    if (!entry) {
+      console.error(`${def.tag}: catalogue entry '${def.spec.entry}' is not registered`);
+      return;
+    }
+    this._teardownView();
+    const ctl = this._ctl = new Controller(def.spec, entry);
+    try {
+      ctl.build(this._params());
+    } catch (e) {
+      this._ctl = null;
+      console.error(`${def.tag}: build failed`, e);
+      return;
+    }
+    compat.on(ctl.world, 'sound', ev => playSound(ev));
+    this._mountView();
+    this._apply(ctl.state, [], true);
+    this._awake = !ctl.quiet();
+  }
+  _scheduleRebuild(onlyIfParamsChanged) {
+    if (this._rebuildQueued) return;
+    this._rebuildQueued = true;
+    queueMicrotask(() => {
+      this._rebuildQueued = false;
+      if (!this.isConnected || !this._ctl) return;
+      if (onlyIfParamsChanged && JSON.stringify(this._params()) === JSON.stringify(this._ctl.params)) return;
+      this._build();
+    });
+  }
+  _fitBlock() {
+    const want = blockSize(this);
+    const [x0, x1, y0, y1] = this._ctl.built.box;
+    const cols = x1 - x0 + 1;
+    const parent = this.parentElement;
+    let avail = Infinity;
+    if (parent) {
+      const cs = getComputedStyle(parent);
+      avail = parent.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
+    }
+    if (!(avail > 0)) avail = Infinity;
+    return Math.max(12, Math.min(want, Math.floor(avail / cols)));
+  }
+  _mountView() {
+    const R = RSR();
+    if (!R) return;
+    const B = this._fitBlock();
+    const T = Math.max(2, Math.round(B * 0.72));
+    this._stage.innerHTML = '';
+    const view = this._view = R.makeView(this._stage, this._ctl.built, { B, T, inspect: this.inspect });
+    if (this.inspect) compat.setInspect(view, true);
+    this._box.style.setProperty('--b', B + 'px');
+    this._box.style.width = view.W + 'px';
+    this._box.style.height = view.H + 'px';
+    this._makeControls();
+    this._layout();
+    view.draw(performance.now());
+  }
+  _teardownView() {
+    if (this._view) compat.removeView(this._view);
+    this._view = null;
+    if (this._stage) this._stage.innerHTML = '';
+    if (this._controlsEl) this._controlsEl.innerHTML = '';
+  }
+  _resized() {
+    if (!this._ctl || !this._view) return;
+    if (this._fitBlock() !== this._view.B) this._mountView();
+    else this._scheduleRebuild(true);
+  }
+
+  /* ----- overlays: controls, sign text, openings ----- */
+  _cellRects(blocks) {
+    const out = [];
+    for (const b of blocks) {
+      out.push(compat.rectOf(this._view, [b.x, b.y, b.z], 'front'));
+      out.push(compat.rectOf(this._view, [b.x, b.y, b.z], 'top'));
+    }
+    return out;
+  }
+  _makeControls() {
+    const spec = this._def.spec;
+    this._controlsEl.innerHTML = '';
+    this._controls = (spec.controls || []).map((c, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'hit';
+      btn.setAttribute('part', 'control');
+      if (c.role && c.role !== 'button') btn.setAttribute('role', c.role);
+      btn.addEventListener('click', ev => this._activate(c, null, ev));
+      if (c.keys) {
+        btn.addEventListener('keydown', ev => {
+          const k = c.keys[ev.key];
+          if (!k) return;
+          ev.preventDefault();
+          this._activate(c, ev.key, ev, k);
+        });
+      }
+      this._controlsEl.appendChild(btn);
+      return { spec: c, btn, i };
+    });
+    this._syncNames();
+    this._syncDisabled();
+  }
+  // Positions follow the blocks, so a control on a moved or popped block moves or disappears with it.
+  _layout() {
+    const io = this._ctl.io, world = this._ctl.world, spec = this._def.spec;
+    for (const c of this._controls || []) {
+      const blocks = asList(c.spec.area || c.spec.io).flatMap(k => blocksOf(io[k])).filter(b => world.get(b.x, b.y, b.z) === b);
+      const r = union(this._cellRects(blocks));
+      c.btn.hidden = !r;
+      if (r) place(c.btn, r);
+    }
+    if (spec.label) {
+      const signs = blocksOf(io[spec.label]).filter(b => world.get(b.x, b.y, b.z) === b);
+      const r = union(signs.map(b => compat.rectOf(this._view, b, 'front')));
+      this._labelEl.hidden = !r;
+      if (r) place(this._labelEl, r);
+    }
+    asList(spec.opening).forEach((o, i) => {
+      const cells = asList(typeof o.cells === 'function' ? o.cells(this._ctl.built) : this._ctl.built[o.cells || 'opening']);
+      const r = union(cells.map(c => compat.rectOf(this._view, c, 'front')));
+      if (r) place(this._windows[i], r);
+    });
+  }
+  _labelText(raw) {
+    if (!raw) {
+      const aria = this.getAttribute('aria-label');
+      if (aria) return aria;
+    }
+    const own = (this.textContent || '').replace(/\s+/g, ' ').trim();
+    if (own || raw) return own;
+    const labels = this.labels ? [...this.labels] : [];
+    return labels.map(l => l.textContent.trim()).join(' ');
+  }
+  _syncNames() {
+    const name = this._labelText();
+    for (const c of this._controls || []) {
+      const label = typeof c.spec.label === 'function' ? c.spec.label(this) : c.spec.label || name;
+      if (label) c.btn.setAttribute('aria-label', label);
+      else c.btn.removeAttribute('aria-label');
+    }
+  }
+  _isDisabled() { return this.disabled || !!this._formDisabled; }
+  _syncDisabled() {
+    const off = this._isDisabled();
+    for (const c of this._controls || []) c.btn.disabled = off;
+    if (this._internals) this._internals.ariaDisabled = off ? 'true' : null;
+  }
+  _primary() { return (this._controls || []).map(c => c.spec).find(c => c.primary) || (this._def.spec.controls || [])[0]; }
+
+  /* ----- input: a player action, then the world runs ----- */
+  _activate(control, key, ev, keyAct) {
+    if (!control || !this._ctl || this._isDisabled()) return;
+    try {
+      this._ctl.act(keyAct ? Object.assign({}, control, { act: keyAct }) : control, key);
+    } catch (e) {
+      console.error(`${this._def.tag}: action failed`, e);
+      return;
+    }
+    if (reducedMotion()) {
+      // I6: settle at once and draw the final frame. The state still comes from the contraption.
+      const changes = this._ctl.settle();
+      this._apply(this._ctl.state, changes, false);
+      this._layout();
+      this._view && this._view.draw(performance.now());
+      return;
+    }
+    this._awake = true;
+    this._view && this._view.draw(performance.now());
+  }
+  _tick() {
+    const changes = this._ctl.tick();
+    if (changes.length) this._apply(this._ctl.state, changes, false);
+    if (this._view) {
+      this._layout();
+      this._view.draw(performance.now());
+    }
+    if (this._ctl.quiet()) this._awake = false;
+  }
+
+  /* ----- state: reflect, events, ARIA, form, announcements ----- */
+  _reflect(fn) {
+    this._reflecting = true;
+    try { fn(); } finally { this._reflecting = false; }
+  }
+  _apply(state, changes, silent) {
+    const spec = this._def.spec;
+    this._reflect(() => {
+      for (const [key, st] of Object.entries(spec.state || {})) {
+        if (!st.attr) continue;
+        const v = state[key];
+        if (typeof v === 'boolean') this.toggleAttribute(st.attr, v);
+        else if (v === null || v === undefined) this.removeAttribute(st.attr);
+        else this.setAttribute(st.attr, String(v));
+      }
+    });
+    for (const c of this._controls || []) {
+      for (const [ariaName, key] of Object.entries(c.spec.aria || {})) {
+        const v = typeof key === 'function' ? key(state, this) : state[key];
+        c.btn.setAttribute('aria-' + ariaName, String(v));
+      }
+    }
+    if (this._internals && this._internals.states) {
+      for (const [key, v] of Object.entries(state)) {
+        if (typeof v !== 'boolean') continue;
+        try { v ? this._internals.states.add(key) : this._internals.states.delete(key); } catch (e) { /* older CustomStateSet */ }
+      }
+    }
+    asList(spec.opening).forEach((o, i) => {
+      const shown = !!state[o.shownWhen || 'open'];
+      const w = this._windows[i];
+      w.hidden = !shown;
+      w.inert = !shown;
+    });
+    if (spec.form && this._internals) {
+      const v = spec.form.value ? spec.form.value(this) : null;
+      this._internals.setFormValue(v === undefined ? null : v);
+    }
+    if (silent) return;
+    const said = [];
+    for (const ch of changes) {
+      ch.dispatched = ch.events.map(type => this._fire(type, ch));
+      const st = spec.state[ch.key];
+      if (st.announce) said.push(st.announce(ch.value, this));
+      if (spec.changed) spec.changed(this, ch);
+    }
+    if (said.length) this._announce(said.join('. '));
+  }
+  _fire(type, change) {
+    const init = { bubbles: true, cancelable: type === 'click', composed: type === 'click' || type === 'input' };
+    const ev = type === 'click' ? new MouseEvent('click', init) : new CustomEvent(type, Object.assign({ detail: { key: change.key, value: change.value, prev: change.prev } }, init));
+    SYNTHETIC.add(ev);
+    this.dispatchEvent(ev);
+    return ev;
+  }
+  _announce(text) {
+    // Alternate a trailing space so the same message twice is still a change.
+    this._flip = !this._flip;
+    this._live.textContent = text + (this._flip ? ' ' : '');
+  }
+  _stateAttrs() {
+    const out = {};
+    for (const st of Object.values(this._def.spec.state || {})) if (st.attr) out[st.attr] = this.getAttribute(st.attr);
+    return out;
+  }
+  // A state set from page code: the player action that should produce it, settled at once, no events.
+  _request(key, value) {
+    const ctl = this._ctl;
+    if (!ctl) {
+      const st = this._def.spec.state[key];
+      if (st.attr) this._reflect(() => (typeof value === 'boolean' ? this.toggleAttribute(st.attr, value) : this.setAttribute(st.attr, String(value))));
+      return;
+    }
+    if (Object.is(ctl.state[key], value)) return;
+    ctl.request(key, value);
+    const changes = ctl.settle();
+    this._apply(ctl.state, changes, true);
+    this._layout();
+    if (this._view) this._view.draw(performance.now());
+  }
+}
+
+function define(tag, spec) {
+  if (!spec || !spec.entry) throw new Error(`Redstone.ui.define('${tag}'): spec.entry is required`);
+  const catalogue = () => Redstone.catalogue || window.Catalogue;
+  const entry = () => (typeof spec.entry === 'string' ? catalogue().get(spec.entry) : spec.entry);
+  const attrToState = {};
+  for (const [key, st] of Object.entries(spec.state || {})) if (st.attr && st.set) attrToState[st.attr] = key;
+  const observed = new Set(['disabled', 'inspect', 'aria-label', 'style', 'class', ...paramAttributes(spec), ...Object.keys(attrToState), ...(spec.observe || [])]);
+  const def = { tag, spec, entry, attrToState };
+
+  class Component extends RedstoneElement {
+    static get observedAttributes() { return [...observed]; }
+  }
+  Component._def = def;
+  for (const [key, st] of Object.entries(spec.state || {})) {
+    Object.defineProperty(Component.prototype, key, {
+      configurable: true,
+      get() { return this._ctl ? this._ctl.state[key] : (st.attr ? coerceAttr(this, st) : undefined); },
+      set: st.set ? function (v) { this._request(key, typeof this[key] === 'boolean' ? !!v : v); } : undefined,
+    });
+  }
+  for (const [name, fn] of Object.entries(spec.methods || {})) Component.prototype[name] = fn;
+  if (!customElements.get(tag)) customElements.define(tag, Component);
+  ui.registry.set(tag, def);
+  return Component;
+}
+const coerceAttr = (el, st) => (st.type === 'number' ? Number(el.getAttribute(st.attr)) : el.hasAttribute(st.attr));
+
+// What the docs table shows: attributes, properties and events of a defined component.
+function describe(tag) {
+  const def = ui.registry.get(tag);
+  if (!def) return null;
+  const spec = def.spec, entry = def.entry() || {};
+  const docs = spec.docs || {};
+  const attributes = [], properties = [], events = [];
+  for (const [key, m] of Object.entries(spec.params || {})) {
+    if (typeof m === 'function') continue;
+    const map = typeof m === 'string' ? { attr: m } : m;
+    const p = (entry.params || []).find(q => q.key === key) || {};
+    const type = typeOf(Object.assign({}, p, map.type || map.def !== undefined ? map : {}));
+    const range = p.options ? p.options.join(' | ') : p.min !== undefined ? `${p.min} to ${p.max}, default ${p.def}` : type;
+    attributes.push({ name: map.attr || key, type: range, doc: map.doc || p.label || '' });
+  }
+  for (const [key, st] of Object.entries(spec.state || {})) {
+    if (st.attr && !attributes.some(a => a.name === st.attr)) attributes.push({ name: st.attr, type: 'reflects ' + key, doc: st.doc || '' });
+    properties.push({ name: key, type: st.set ? 'read/write' : 'read-only', doc: st.doc || '' });
+    for (const type of asList(st.event)) events.push({ name: type, doc: `${st.when === 'rise' ? 'When ' + key + ' turns on' : st.when === 'fall' ? 'When ' + key + ' turns off' : 'When ' + key + ' changes'}${st.eventDoc ? '. ' + st.eventDoc : ''}` });
+  }
+  for (const [name, doc] of Object.entries(docs.attributes || {})) attributes.push({ name, type: 'string', doc });
+  attributes.push({ name: 'disabled', type: 'boolean', doc: 'No player actions; the controls leave the tab order.' });
+  attributes.push({ name: 'inspect', type: 'boolean', doc: 'X-ray: ghost covering blocks and show the wiring.' });
+  for (const [name, doc] of Object.entries(docs.properties || {})) properties.push({ name, type: '', doc });
+  properties.push({ name: 'contraption', type: 'read-only', doc: '{ world, io, entry } for the curious.' });
+  for (const [name, doc] of Object.entries(docs.events || {})) events.push({ name, doc });
+  const actions = (spec.controls || []).map(c => (typeof c.act === 'string' ? c.act : 'custom') + (c.io ? ' ' + c.io : ''));
+  return { tag, entry, attributes, properties, events, actions, keys: (spec.controls || []).flatMap(c => Object.keys(c.keys || {})) };
+}
+
+function injectStyles(css) {
+  const script = document.currentScript;
+  if (script && script.hasAttribute('data-rs-no-style')) return;
+  if (document.getElementById('redstone-ui-css')) return;
+  const style = document.createElement('style');
+  style.id = 'redstone-ui-css';
+  style.textContent = css;
+  (document.head || document.documentElement).appendChild(style);
+}
+
+Object.assign(Redstone.ui, { define, describe, injectStyles, sound: playSound, Element: RedstoneElement, ticker });
+})();

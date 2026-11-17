@@ -1,0 +1,16 @@
+/* Redstone UI: page-level styles. Each component draws itself inside its shadow root; this file only covers
+   what has to live in the page: the box an element reserves before the script runs, and the custom
+   properties an author can set. Per-component rules live in src/ui/components/<name>.css and are
+   appended to this file by the build.
+
+   Custom properties (set them on any ancestor or on the element):
+     --rs-block        block size in CSS px, 12 to 48 (default 24)
+     --rs-focus        focus ring color (default: the text color)
+     --rs-sign-font    font for text on signs (default: the system monospace)
+     --rs-sign-ink     sign text color (default: near black, like the game)
+     --rs-window-bg    background behind content shown through an opening (default: Canvas)
+*/
+
+/* Before the script runs (or if it never does) an element is its light DOM: plain, readable HTML.
+   Each component's own CSS file reserves its box with a rule like:
+     rs-name:not(:defined) { display: inline-flex; align-items: center; min-height: calc(var(--rs-block, 24px) * 3.44); } */

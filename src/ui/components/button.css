@@ -1,0 +1,10 @@
+/* rs-button: before the element upgrades, show the label and reserve the contraption's height
+   (2 blocks tall, 2 rows deep: 2 x 1 + 2 x 0.72 blocks). */
+rs-button:not(:defined) {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  box-sizing: border-box;
+  min-height: calc(var(--rs-block, 24px) * 3.44);
+  padding: 0 .4em;
+}
