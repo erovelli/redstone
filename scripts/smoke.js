@@ -431,6 +431,62 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-input (signs, native field, form, a page MutationObserver)');
+  {
+    const { page, errors } = await open(browser);
+    const user = 'rs-input[name="user"]', note = 'rs-input[name="note"]';
+    await page.locator(user).scrollIntoViewIfNeeded();
+    check('starts from the value attribute, written on the signs; FormData has both', await page.$eval(note, el => el.value === 'Hello' && el.contraption.io.signs[0].text === 'Hello' &&
+      [...new FormData(el.form)].map(([k, v]) => k + '=' + v).join('&') === 'user=&note=Hello'));
+    check('required and blank: valueMissing; the placeholder shows on the signs', await page.$eval(user, el => el.validity.valueMissing &&
+      el.shadowRoot.querySelector('.rs-text').textContent === 'Steve'));
+    check('the native field: named by the label, maxlength = the signs, autocomplete passed on', await page.$eval(user, el => {
+      const f = el.shadowRoot.querySelector('.rs-field');
+      return f.getAttribute('aria-label') === 'Name' && f.maxLength === el.contraption.built.capacity && f.getAttribute('autocomplete') === 'username';
+    }));
+    await page.locator(user).getByText('Name').click();
+    check('clicking the label focuses the field', await page.$eval(user, el => el.shadowRoot.activeElement === el.shadowRoot.querySelector('.rs-field')));
+    await events(page);
+    await page.keyboard.type('Alex');
+    check('typing writes the signs, and value follows them at once', await page.$eval(user, el => el.value === 'Alex' && el.contraption.io.signs[0].text === 'Alex'));
+    let ev = await events(page);
+    check('one input per keystroke from the signs, no change yet', ev.filter(e => e.name === 'user').map(e => e.type + e.value).join() === 'inputA,inputAl,inputAle,inputAlex', ev);
+    await page.keyboard.press('Tab');
+    ev = await events(page);
+    check('leaving the field commits: one change', ev.filter(e => e.name === 'user' && e.type === 'change').map(e => e.value).join() === 'Alex', ev);
+    check('valid once filled; FormData has it', await page.$eval(user, el => el.checkValidity() && new FormData(el.form).get('user') === 'Alex'));
+    await page.locator(note + ' >> .rs-field').focus();
+    await page.keyboard.press('End');
+    await page.keyboard.type(' world, this is longer than thirty');
+    check('maxlength 30 holds; a sign takes 15 characters', await page.$eval(note, el => el.value.length === 30 && el.contraption.io.signs[0].text.length === 15 && el.contraption.io.signs[1].text === el.value.slice(15)));
+    await page.keyboard.press('Enter');
+    ev = await events(page);
+    check('Enter commits (change) and submits the form', ev.some(e => e.type === 'change' && e.name === 'note') && ev.some(e => e.type === 'submit'), ev);
+    check('el.value = "Steve" writes the signs at once, no events', await page.$eval(user, el => { el.value = 'Steve'; return el.value === 'Steve' && el.contraption.io.signs[0].text === 'Steve' && el.shadowRoot.querySelector('.rs-field').value === 'Steve'; }));
+    await page.waitForTimeout(200);
+    check('a programmatic set fires no events', !(await events(page)).some(e => e.name === 'user'));
+    await page.$eval(user, el => el.form.reset());
+    check('form reset returns both fields to their starting values', await until(page, s => { const [a, b] = document.querySelectorAll(s); return a.value === '' && b.value === 'Hello'; }, 'rs-input'));
+    await page.$eval(user, el => el.setAttribute('disabled', ''));
+    await page.locator(user + ' >> .rs-field').focus().catch(() => {});
+    await page.keyboard.type('zz');
+    check('disabled: typing writes nothing', await page.$eval(user, el => el.value === '' && !el.contraption.io.signs[0].text));
+    // Regression: a page MutationObserver with an element whose signs show fallback text must not loop.
+    const alive = await Promise.race([
+      page.evaluate(() => {
+        new MutationObserver(() => {}).observe(document.body, { attributes: true, childList: true, subtree: true });
+        const c = document.createElement('rs-collapse');
+        c.setAttribute('summary', 'Loop?');
+        document.body.appendChild(c);
+        return new Promise(r => setTimeout(() => r(true), 300));
+      }),
+      new Promise(r => setTimeout(() => r(false), 4000)),
+    ]);
+    check('a MutationObserver on the page does not make sign labels loop', alive === true);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nrs-theme (docs header, gallery, storage, workbench)');
   {
     const { page, errors } = await open(browser, { colorScheme: 'dark' });

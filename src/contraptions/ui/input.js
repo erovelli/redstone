@@ -1,4 +1,4 @@
-// UI contraption for <rs-input>: a row of oak wall signs on planks. The player writes on the signs; the text field's
+// UI contraption for <rs-input>: a row of oak wall signs on stone bricks. The player writes on the signs; the text field's
 // value is what the signs say, read left to right.
 //
 // A Java sign line holds about 15 characters (the game limits a line by its width; 15 fit for ordinary text), so each
@@ -7,8 +7,8 @@
 // at the sign font (SPEC I3), so fewer characters are visible than a sign holds; like a native input, the field
 // scrolls while it is being edited.
 //
-//   front view (x east, z up); the signs hang on the front (y = 1) of the planks:
-//     z=0   [planks+sign] [planks+sign] ... (signs)
+//   front view (x east, z up); the signs hang on the front (y = 1) of the stone bricks:
+//     z=0   [bricks+sign] [bricks+sign] ... (signs)
 //     z=-1  floor --------------------------
 (function () {
 const N = typeof module !== 'undefined';
@@ -43,7 +43,7 @@ function buildInput(p = {}) {
   const signs = [];
   for (let x = 0; x < n; x++) {
     w.put(x, 0, -1, FLOOR);
-    w.put(x, 0, 0, 'planks');
+    w.put(x, 0, 0, 'bricks');            // stone bricks: the oak boards stand out against them
     signs.push(w.put(x, 1, 0, 'sign', { att: 'N', kind: 'wall', text: chunks[x] }));
   }
   w.seal();
