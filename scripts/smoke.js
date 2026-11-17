@@ -102,6 +102,9 @@ async function main() {
       return [gone, t.members.size === n, el.checked, el.contraption && el.contraption.io.lever.on].join();
     });
     check('teardown on disconnect, rebuild on reconnect (state kept through the attribute)', td === 'true,true,true,true', td);
+    const theme0 = await page.evaluate(() => document.documentElement.dataset.theme);
+    await page.locator('#lights >> .hit').click();
+    check('the docs theme switch follows its lamp', await until(page, t => document.documentElement.dataset.theme !== t, theme0));
     check('element.contraption exposes world, io and entry', await page.$eval(fan, el => !!(el.contraption.world && el.contraption.io.lever && el.contraption.entry.id === 'ui-toggle')));
     check('no console errors', errors.length === 0, errors);
     await page.close();
