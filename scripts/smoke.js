@@ -33,7 +33,7 @@ async function open(browser, opts = {}) {
       document.addEventListener(type, ev => {
         const t = ev.target;
         const name = t.getAttribute && (t.getAttribute('name') || t.textContent.trim());
-        const rec = { type, tag: t.localName, name, checked: t.checked, active: t.active };
+        const rec = { type, tag: t.localName, name, checked: t.checked, active: t.active, value: t.value };
         if (type === 'submit') {
           ev.preventDefault();
           rec.data = [...new FormData(t)].map(([k, v]) => k + '=' + v).join('&');
@@ -308,6 +308,72 @@ async function main() {
     await page.waitForTimeout(700);
     check('disabled: no presses', await page.$eval(size, el => el.value === 'm' && !el.contraption.io.buttons.some(b => b.on)));
     check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
+  console.log('\nrs-slider (keyboard, pointer drag, form, reduced motion)');
+  {
+    const { page, errors } = await open(browser);
+    const vol = 'rs-slider[name="volume"]', zoom = 'rs-slider[name="zoom"]';
+    await page.locator(vol).scrollIntoViewIfNeeded();
+    check('starts at its value; FormData has every enabled slider', await page.$eval(vol, el => el.value === '7' && el.contraption.io.comparator.out === 7 &&
+      [...new FormData(el.form)].map(([k, v]) => k + '=' + v).join('&') === 'volume=7&zoom=30'));
+    check('role slider with aria-valuenow/min/max/text', await page.$eval(zoom, el => {
+      const b = el.shadowRoot.querySelector('.hit');
+      return ['role', 'aria-valuenow', 'aria-valuemin', 'aria-valuemax', 'aria-valuetext', 'aria-label'].map(a => b.getAttribute(a)).join() === 'slider,30,0,100,30,Zoom';
+    }));
+    await page.locator(vol + ' >> .hit').focus();
+    await events(page);
+    await page.keyboard.press('ArrowRight');
+    check('ArrowRight puts books in until the comparator reads 8', await until(page, s => document.querySelector(s).value === '8', vol) &&
+      await page.$eval(vol, el => el.contraption.io.lamps.filter(l => l.lit).length === 8));
+    let ev = await events(page);
+    check('one input and one change, carrying the new value', ev.filter(e => e.name === 'volume').map(e => e.type + e.value).join() === 'input8,change8', ev);
+    for (const [k, v] of [['End', '15'], ['PageDown', '12'], ['Home', '0'], ['ArrowLeft', '0'], ['ArrowUp', '1']]) {
+      await page.keyboard.press(k);
+      check(`${k} -> ${v}`, await until(page, ([s, want]) => document.querySelector(s).value === want, [vol, v]));
+    }
+    check('state is announced', await page.$eval(vol, el => /Volume 1/.test(el.shadowRoot.querySelector('[aria-live]').textContent)));
+    // Pointer: press on the 4th lamp and drag to the 10th; input while moving, one change on release.
+    await events(page);
+    const pts = await page.$eval(vol, el => {
+      const v = el.contraption.view, st = el.shadowRoot.querySelector('.stage').getBoundingClientRect();
+      return [3, 9].map(i => { const r = v.rectOf(el.contraption.io.lamps[i], 'front'); return [st.left + r.x + r.w / 2, st.top + r.y + r.h / 2]; });
+    });
+    await page.mouse.move(pts[0][0], pts[0][1]);
+    await page.mouse.down();
+    check('pressing on the 4th lamp aims for 4', await page.$eval(vol, el => el.value === '4' && el.committed === '1'));
+    await page.mouse.move(pts[1][0], pts[1][1], { steps: 4 });
+    check('dragging keeps aiming: 10, change not yet', await page.$eval(vol, el => el.value === '10'));
+    ev = await events(page);
+    const inputs = ev.filter(e => e.type === 'input' && e.name === 'volume').length;
+    check('input fired while moving, no change yet', inputs >= 2 && !ev.some(e => e.type === 'change'), ev);
+    await page.mouse.up();
+    ev = await events(page);
+    check('one change on release, with 10', ev.filter(e => e.type === 'change').map(e => e.value).join() === '10', ev);
+    check('raw clicks never reach the page', !ev.some(e => e.type === 'click'), ev);
+    check('el.value = 3 settles at once, no events', await page.$eval(vol, el => { el.value = 3; return el.value === '3' && el.contraption.io.comparator.out === 3; }));
+    check('step 10 over 0..100: value snaps to the step', await page.$eval(zoom, el => { el.value = 47; return el.value === '50' && el.valueAsNumber === 50; }));
+    await page.waitForTimeout(250);
+    check('programmatic sets fire no events', !(await events(page)).some(e => e.name === 'volume' || e.name === 'zoom'));
+    await page.$eval(vol, el => el.form.reset());
+    check('form reset returns to the starting value', await until(page, s => document.querySelector(s).value === '7', vol));
+    check('disabled: keys and pointer do nothing', await page.$eval('rs-slider[name="bass"]', el => {
+      const b = el.shadowRoot.querySelector('.hit');
+      b.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+      return b.disabled && el.value === '2';
+    }));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+  {
+    const { page, errors } = await open(browser, { reducedMotion: 'reduce' });
+    const vol = 'rs-slider[name="volume"]';
+    await page.locator(vol).scrollIntoViewIfNeeded();
+    await page.locator(vol + ' >> .hit').focus();
+    await page.keyboard.press('End');
+    check('reduced motion: End settles at once and the state follows the comparator', await page.$eval(vol, el => el.value === '15' && el.contraption.world.quiet));
+    check('reduced motion: no console errors', errors.length === 0, errors);
     await page.close();
   }
 

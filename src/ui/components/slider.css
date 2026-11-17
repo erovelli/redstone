@@ -1,0 +1,10 @@
+/* rs-slider: before the element upgrades, show its label and reserve the bar's height
+   (2 blocks tall, 1 row deep: 2 x 1 + 0.72 blocks). */
+rs-slider:not(:defined) {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  box-sizing: border-box;
+  min-height: calc(var(--rs-block, 16px) * 2.72);
+  padding: 0 .4em;
+}

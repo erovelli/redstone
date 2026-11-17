@@ -383,6 +383,13 @@ function blockSize(el) {
   return Math.max(12, Math.min(48, Number.isFinite(n) ? n : 24));
 }
 
+// The nearest ancestor with a box: a display: contents parent (a <form> laid out by its own parent) has none.
+function boxParent(el) {
+  let p = el.parentElement;
+  while (p && p.parentElement && getComputedStyle(p).display === 'contents') p = p.parentElement;
+  return p;
+}
+
 // Union of rects.
 function union(rects) {
   if (!rects.length) return null;
@@ -427,7 +434,7 @@ class RedstoneElement extends HTMLElement {
     if (seen) seen.observe(this);
     if (typeof ResizeObserver !== 'undefined') {
       this._ro = new ResizeObserver(() => this._resized());
-      this._ro.observe(this.parentElement || document.documentElement);
+      this._ro.observe(boxParent(this) || document.documentElement);
     }
     // Sign sizes are measured in the sign font; measure again once web fonts have loaded.
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => this._scheduleRebuild(true));
@@ -477,6 +484,17 @@ class RedstoneElement extends HTMLElement {
   get label() { return this._labelText(); }
   // Re-read --rs-block and the container width after a change the element cannot observe (an ancestor's CSS).
   refresh() { this._resized(); }
+  // A player action from a component's own DOM code (a slider drag, a text field, typeahead): fn(hand, io, built)
+  // goes the same way as a control's act (disabled, reduced motion, waking the world). With { settle: true } the
+  // world is settled and the state applied at once, so the element's events fire before this returns.
+  act(fn, opts = {}) {
+    this._activate({ act: fn }, null, opts.event);
+    if (!opts.settle || !this._ctl || this._isDisabled()) return;
+    const changes = this._ctl.settle();
+    this._apply(this._ctl.state, changes, false);
+    this._layout();
+    if (this._view) this._view.draw(performance.now());
+  }
 
   formDisabledCallback(disabled) {
     this._formDisabled = disabled;
@@ -592,7 +610,7 @@ class RedstoneElement extends HTMLElement {
     const want = blockSize(this);
     const [x0, x1, y0, y1] = this._ctl.built.box;
     const cols = x1 - x0 + 1;
-    const parent = this.parentElement;
+    const parent = boxParent(this);
     let avail = Infinity;
     if (parent) {
       const cs = getComputedStyle(parent);
@@ -833,6 +851,8 @@ class RedstoneElement extends HTMLElement {
         try { bad ? this._internals.setValidity(bad.flags, bad.message, anchor) : this._internals.setValidity({}); } catch (e) { /* no anchor yet */ }
       }
     }
+    // spec.sync(el, state): after every state change, silent or not, so the element's own overlays follow it.
+    if (spec.sync) spec.sync(this, state);
     if (silent) return;
     const said = [];
     for (const ch of changes) {

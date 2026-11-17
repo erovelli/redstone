@@ -104,6 +104,8 @@ Redstone.ui.define('rs-toggle', {
 | `state` | `{ key: output }` | Outputs: each becomes a property (and optionally an attribute, events, an announcement). |
 | `form` | `{ value(el) }` | Form value after every state change (`null` = not submitted). Elements are always form-associated. |
 | `changed(el, change)` | function | Runs after a change's events were dispatched (not for silent changes). `change.dispatched` holds the events, so you can honour `defaultPrevented` (rs-button submits its form here). |
+| `mounted(el, view, built)` | function | Runs after the view is (re)mounted: add the element's own overlays to `el.shadowRoot` (rs-slider's drag handler, rs-input's text field). |
+| `sync(el, state)` | function | Runs after every state change, silent ones (a property set from page code) included, so those overlays follow the state. |
 | `methods` | `{ name: function }` | Extra prototype methods (`this` is the element). |
 | `styles` | CSS string | Extra CSS inside the shadow root. Parts: `box`, `stage`, `label`, `window`, `control`. |
 | `observe` | string[] | Extra attributes that rebuild the contraption when they change. |
@@ -155,6 +157,8 @@ Every boolean state is also exposed as a custom state (`rs-toggle:state(checked)
 ### What the core does for you
 
 Shadow root and canvas; building and settling the contraption; one shared 100 ms ticker for the page that skips quiet and off-screen worlds and wakes a world on input; drawing in-between frames only while something moves; `--rs-block` (12 to 48 px, default 24) per element and shrinking to fit the container; `inspect` (x-ray); reduced motion (an input settles the world at once and the final frame is drawn); block sounds when `Redstone.config.sound` is true; focus, keyboard and ARIA; live announcements; `ElementInternals` form value, `form`, `labels`, `formResetCallback` (rebuilds from the starting attributes) and `formDisabledCallback`; `disabled`; teardown on disconnect and a rebuild on reconnect; `element.contraption` (`{ world, io, entry, built, view, state }`); `element.refresh()` to re-read `--rs-block` after an ancestor's CSS changed.
+
+An overlay that is not a control (a drag along a lamp bar, a native `<input>` over a sign) performs its player actions with `el.act((hand, io, built) => ..., { event, settle })`: the same path as a control's `act` (`disabled`, reduced motion, waking the world); `settle: true` also settles the world and applies the state before it returns, so the element's events fire at once.
 
 Raw pointer clicks on the machine never reach page listeners in the bubble phase; the element's own events come from its output. (Capture-phase listeners above the element still see the raw click; that cannot be prevented.) `el.click()` and a click on a `<label for>` operate the primary control.
 
