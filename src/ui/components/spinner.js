@@ -14,7 +14,8 @@ Redstone.ui.define('rs-spinner', {
   },
 
   label: 'beside',
-  styles: ':host { --rs-block: 16px; }',
+  // In a narrow container the caption wraps under the machine instead of overflowing.
+  styles: ':host { --rs-block: 16px; flex-wrap: wrap; }',
 
   host: {
     role: 'status',

@@ -9,7 +9,8 @@ Redstone.ui.define('rs-status', {
   },
 
   label: 'beside',
-  styles: ':host { --rs-block: 16px; }',
+  // In a narrow container the caption wraps under the machine instead of overflowing.
+  styles: ':host { --rs-block: 16px; flex-wrap: wrap; }',
 
   // Not a control: the text beside it is the status, and its state is in the accessible name.
   host: {

@@ -15,7 +15,7 @@ function spec(tone, removable) {
     entry: 'ui-chip',
     params: {
       signs: (el, ctx) => ctx.signsFor(ctx.text, { min: 1, max: 10 }),
-      dismissible: removable ? { attr: 'dismissible', type: 'boolean', doc: 'Adds a stone button on a piston that pushes the blocks away: the signs pop and the chip goes.' } : () => false,
+      dismissible: removable ? { attr: 'dismissible', type: 'boolean', doc: 'Adds an oak button on a piston that pushes the blocks away: the signs pop and the chip goes.' } : () => false,
       lit: { attr: 'lit', type: 'boolean', doc: 'The signs hang on redstone lamps, lit by redstone blocks behind them.' },
       tone: { attr: 'tone', type: 'string', def: tone, doc: 'Colour of the concrete behind the signs: plain (oak planks), white, gray, black, red, orange, yellow, lime, green, cyan, light_blue, blue, purple, pink.' },
     },

@@ -14,7 +14,8 @@ Redstone.ui.define('rs-progress', {
   label: 'beside',
 
   // A bar reads best small: 16 px blocks unless the page sets --rs-block on the element.
-  styles: ':host { --rs-block: 16px; }',
+  // In a narrow container the caption wraps under the bar instead of overflowing.
+  styles: ':host { --rs-block: 16px; flex-wrap: wrap; }',
 
   host: {
     role: 'progressbar',

@@ -182,6 +182,48 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nfeedback: chip, progress, spinner, toast, status (and core host ARIA, cancelable events, settle:false)');
+  {
+    const { page, errors } = await open(browser);
+    await page.locator('#rs-chip').scrollIntoViewIfNeeded();
+    const chip = await page.evaluate(() => new Promise(resolve => {
+      const el = document.querySelector('rs-chip[dismissible]');
+      const label = el.shadowRoot.querySelector('.label').getAttribute('aria-hidden');
+      el.addEventListener('dismiss', ev => {
+        ev.preventDefault();
+        setTimeout(() => resolve({ cancelable: ev.cancelable, connected: el.isConnected, label }), 50);
+      });
+      el.shadowRoot.querySelector('.hit').focus();
+      el.shadowRoot.querySelector('.hit').click();
+    }));
+    check('chip: dismiss is cancelable; cancelled, the element stays; its text is not aria-hidden', chip.cancelable && chip.connected && chip.label === null, chip);
+    const gone = await page.evaluate(() => new Promise(resolve => {
+      const el = document.querySelectorAll('rs-chip[dismissible]')[1];
+      el.shadowRoot.querySelector('.hit').click();
+      setTimeout(() => resolve(el.isConnected), 600);
+    }));
+    check('chip: an uncancelled dismiss removes the element', gone === false);
+    const bar = await page.evaluate(() => {
+      const el = document.querySelector('rs-progress[value="40"]');
+      el.value = 73;
+      const a = [el.value, el._internals.role, el._internals.ariaValueNow];
+      el.removeAttribute('value');
+      return a.concat([el.value, el._internals.ariaBusy]);
+    });
+    check('progress: value snaps to the lamps, progressbar role, indeterminate when the value goes', bar.join() === '70,progressbar,70,,true', bar);
+    const spin = await page.$eval('rs-spinner', el => [el._internals.role, el.contraption.world.quiet]);
+    check('spinner: role status and its clock runs', spin[0] === 'status' && spin[1] === false, spin);
+    await page.locator('#rs-toast').scrollIntoViewIfNeeded();
+    await page.evaluate(() => document.getElementById('saved').show());
+    check('toast: show() opens it (toggle from the output)', await until(page, () => document.getElementById('saved').open === true));
+    check('toast: the message window is shown', await page.$eval('#saved', el => !el.shadowRoot.querySelector('.window').hidden));
+    check('toast: the timer closes it', await until(page, () => document.getElementById('saved').open === false, null, 6000));
+    const st = await page.$eval('rs-status:not([on])', el => { el.on = true; return [el.on, el.hasAttribute('on')]; });
+    check('status: setting on lights the lamp and reflects the attribute', st.join() === 'true,true', st);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });
