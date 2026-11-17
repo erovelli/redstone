@@ -128,6 +128,7 @@ Changing a mapped attribute rebuilds the contraption from scratch (a new world).
 | `area` | io keys whose blocks form the hit area (for example the button and its label signs). |
 | `label` | Accessible name: string or `el => string`. Default: `aria-label`, else the light-DOM text, else the `<label>` text. |
 | `keys` | `{ ArrowUp: act, ArrowDown: act }`: extra keys (the default prevented). Space and Enter already click a button. |
+| `hover` | `{ enter, leave }` actions (names or functions, like `act`) for a control the pointer stands on: the pointer over the element, or focus inside it, is `enter`; leaving both is `leave`; a touch tap is `enter` and tapping elsewhere is `leave` (rs-spoiler's pressure plate). |
 | `primary` | This control is the one a `<label for>` click or `el.click()` operates (default: the first). |
 
 **`state` outputs**:

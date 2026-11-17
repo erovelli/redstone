@@ -623,6 +623,8 @@ class RedstoneElement extends HTMLElement {
   _makeControls() {
     const spec = this._def.spec;
     this._controlsEl.innerHTML = '';
+    if (this._hoverOff) this._hoverOff.abort();
+    this._hoverOff = typeof AbortController !== 'undefined' ? new AbortController() : null;
     this._controls = (spec.controls || []).map((c, i) => {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -638,11 +640,26 @@ class RedstoneElement extends HTMLElement {
           this._activate(c, ev.key, ev, k);
         });
       }
+      if (c.hover) this._hover(c, btn);
       this._controlsEl.appendChild(btn);
       return { spec: c, btn, i };
     });
     this._syncNames();
     this._syncDisabled();
+  }
+  // hover: { enter, leave } actions for a control the pointer "stands on": the pointer over the element or focus
+  // inside it (the control, or content shown through an opening) is enter; leaving both is leave. A touch tap is
+  // enter (the tapped button takes focus); tapping elsewhere is leave.
+  _hover(c, btn) {
+    const opt = this._hoverOff ? { signal: this._hoverOff.signal } : undefined;
+    let over = false;
+    const inside = () => over || this.matches(':focus-within');
+    const enter = ev => this._activate(c, null, ev, c.hover.enter);
+    const leave = ev => { if (!inside()) this._activate(c, null, ev, c.hover.leave); };
+    this.addEventListener('pointerenter', ev => { if (ev.pointerType !== 'touch') over = true; enter(ev); }, opt);
+    this.addEventListener('pointerleave', ev => { over = false; if (ev.pointerType !== 'touch') leave(ev); }, opt);
+    this.addEventListener('focusin', enter, opt);
+    this.addEventListener('focusout', ev => { if (!ev.relatedTarget || !this.contains(ev.relatedTarget) && !this.shadowRoot.contains(ev.relatedTarget)) queueMicrotask(() => leave(ev)); }, opt);
   }
   // Positions follow the blocks, so a control on a moved or popped block moves or disappears with it.
   _layout() {
