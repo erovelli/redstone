@@ -307,7 +307,7 @@ defineBlock('daylight', {
   tick: (w, b) => {
     const sky = clamp(w.sky, 0, 15);
     const level = b.inverted ? 15 - sky : sky;
-    if (b.level !== level) b.level = level;
+    if (b.level !== level) { b.level = level; w._dirty = true; }
   },
 });
 
@@ -335,8 +335,6 @@ function faceProps(b) {
 
 // Fields that are engine bookkeeping, not block state: left out of hash() and assertSteady().
 const TRANSIENT = new Set(['x', 'y', 'z', 't', 'mv', 'mvAt', 'pushedAt', 'seen', 'busy', 'firePending', 'pend', 'offAt', 'tgt', 'inp', 'p', 'pts', 'up']);
-// Engine-owned fields whose change means "something happened" (used by the cheap quiet signature).
-const SIG_FIELDS = ['on', 'lit', 'ext', 'lvl', 'out', 'open', 'powered', 'locked', 'ringing', 'level', 'fill', 'page', 'delay', 'note', 'last', 'rot'];
 
 function mix(h, v) {
   h = Math.imul(h ^ (v | 0), 0x9e3779b1);
@@ -379,7 +377,7 @@ class World {
     this._emitting = false;
     this._listeners = Object.create(null);
     this._quiet = false;
-    this._sig = 0;
+    this._dirty = true;        // something changed during the current tick
     this._toggles = null;
     this.hand = new Hand(this);
   }
@@ -395,6 +393,7 @@ class World {
     const k = K(x, y, z);
     if (b) { b.x = x; b.y = y; b.z = z; this.c.set(k, b); } else this.c.delete(k);
     this._quiet = false;
+    this._dirty = true;
   }
   put(x, y, z, t, o = {}) {
     this._guard('put');
@@ -446,8 +445,25 @@ class World {
       if (bad.length) throw new Error('World.seal: not a strict world:\n  ' + bad.join('\n  '));
       Object.freeze(this.floor);
     }
+    this._adopt();
     this.sealed = true;
     return this;
+  }
+
+  // Blocks built without `powered` take their current power as given (no edge), except that an open trapdoor
+  // or gate is taken to be held open by power. Runs at seal(), or before the first tick of an unsealed world.
+  _adopt() {
+    if (this._adopted) return;
+    this._adopted = true;
+    this._inside++;
+    try {
+      this.computePower();
+      for (const b of this.c.values()) {
+        const def = defOf(b.t);
+        if (!def.onPower || b.powered !== undefined) continue;
+        b.powered = def.openable ? !!b.open : this._activated(b, !!def.qc);
+      }
+    } finally { this._inside--; }
   }
 
   // ---- events (observers only) ---------------------------------------------------------------
@@ -560,7 +576,7 @@ class World {
     const cond = n => !!n && defOf(n.t).conductive;
     const feeds = new Map();   // dust -> dust that read from it
     const link = (from, to) => { let l = feeds.get(from); if (!l) feeds.set(from, l = []); l.push(to); };
-    const buckets = [];
+    const buckets = [], old = [];
     for (let i = 0; i <= 15; i++) buckets.push([]);
     for (const b of dusts) {
       let base = 0;
@@ -596,8 +612,11 @@ class World {
         }
         if (con) pts.push(d);
       }
-      b.pts = !pts.length ? HL.slice() : pts.length === 1 ? [pts[0], OPP[pts[0]]] : pts;
+      const newPts = !pts.length ? HL.slice() : pts.length === 1 ? [pts[0], OPP[pts[0]]] : pts;
+      if (!this._dirty && (!b.pts || b.pts.join() !== newPts.join() || (b.up || []).join() !== up.join())) this._dirty = true;
+      b.pts = newPts;
       b.up = up;
+      old.push(b.lvl);
       b.lvl = base;
       buckets[base].push(b);
     }
@@ -612,6 +631,7 @@ class World {
         for (const n of out) if (n.lvl < lv - 1) { n.lvl = lv - 1; buckets[lv - 1].push(n); }
       }
     }
+    if (!this._dirty) for (let i = 0; i < dusts.length; i++) if (dusts[i].lvl !== old[i]) { this._dirty = true; break; }
   }
   _supportsDust(n) {
     if (!n) return false;
@@ -636,7 +656,7 @@ class World {
 
   // Redstone lamp: on at once, off 2 ticks after it loses power.
   _lampTick(b, now) {
-    if (this.lampPowered(b)) { b.lit = true; b.offAt = 0; return; }
+    if (this.lampPowered(b)) { if (!b.lit) { b.lit = true; this._dirty = true; } b.offAt = 0; return; }
     if (!b.lit) return;
     if (!b.offAt) b.offAt = now + 2;
     if (b.offAt === now + 1) {
@@ -694,7 +714,7 @@ class World {
       const n = this.nb(b, s);
       if (n && (n.t === 'repeater' || n.t === 'comparator') && defOf(n.t).strong(this, n, OPP[s]) > 0) { locked = true; break; }
     }
-    b.locked = locked;
+    if (!!b.locked !== locked) { b.locked = locked; this._dirty = true; }
     if (!b._due && !locked && inp !== !!b.on) b._due = now + (b.delay || 1);
     if (!b._due) return;
     if (b._due > now + 1) { this.at(now + 1, NOOP); return; }
@@ -764,7 +784,7 @@ class World {
     const occupied = b._player || (b.wood && this.entities.some(en => !en.gone && Math.floor(en.x) === b.x && Math.floor(en.y) === b.y && Math.floor(en.z + 1e-6) === b.z));
     if (occupied) {
       b._rel = 0;
-      if (!b.on) { b.on = true; b._since = now; b._by = true; this._sound('click', b); }
+      if (!b.on) { b.on = true; b._since = now; b._by = true; this._dirty = true; this._sound('click', b); }
       return;
     }
     if (!b.on || !b._by || b._rel) return;   // a plate poked on by legacy code stays as it was put
@@ -789,6 +809,7 @@ class World {
     if (b.powered === undefined) b.powered = !!b.open;
     if (p === b.powered) return;
     b.powered = p;
+    this._dirty = true;
     if (upper) upper.powered = p;
     if (!!b.open !== p) {
       b.open = p;
@@ -849,6 +870,7 @@ class World {
     let f = 0, any = false;
     for (const s of b.items) if (s && s.n > 0) { f += s.n / maxStack(s.id); any = true; }
     b.fill = Math.floor(f / n * 14) + (any ? 1 : 0);
+    this._dirty = true;
   }
   // Insert up to n of item id; returns how many went in.
   _insert(c, id, n) {
@@ -947,7 +969,7 @@ class World {
   // container above or picks up items lying in it. Locked while powered (no quasi-connectivity).
   _hopperTick(b, now) {
     const p = this._activated(b, false);
-    if (b.powered !== p) b.powered = p;
+    if (b.powered !== p) { b.powered = p; this._dirty = true; }
     if (p || now < (b._cool || 0)) return;
     let moved = false;
     const slots = this._slots(b);
@@ -1299,6 +1321,7 @@ class World {
     const d = axis === 'x' ? Math.max(dy, dz) : axis === 'y' ? Math.max(dx, dz) : Math.max(dx, dy);
     const power = Math.max(1, Math.ceil(15 * clamp((0.5 - d) / 0.5, 0, 1)));
     b.out = power;
+    this._dirty = true;
     const at = this.t + 1 + (en.kind === 'arrow' ? 10 : 4);
     b._offAt = at;
     this.at(at, () => { if (b._offAt === at) b.out = 0; });
@@ -1351,12 +1374,14 @@ class World {
     // A sealed world that is quiet has nothing to do: nothing changed, nothing is scheduled, nothing moves.
     if (this.sealed && this._quiet) { this.t++; return; }
     const now = this.t;
+    if (!this._adopted) this._adopt();
     this._inside++;
     try {
       const due = [], later = [];
       for (const e of this.ev) (e.t <= now ? due : later).push(e);
       this.ev = later;
-      for (const e of due) e.fn();
+      this._dirty = false;
+      for (const e of due) { if (e.fn !== NOOP) this._dirty = true; e.fn(); }
       for (const en of this.entities) { en.px = en.x; en.py = en.y; en.pz = en.z; }
       this.computePower();
       const pistons = [], observers = [];
@@ -1370,7 +1395,7 @@ class World {
           // A block built without `powered` takes its current power as given (no edge), except that an open
           // trapdoor or gate is taken to be held open by power.
           if (b.powered === undefined) b.powered = def.openable ? !!b.open : p;
-          if (p !== b.powered) { b.powered = p; def.onPower(this, b, p); }
+          if (p !== b.powered) { b.powered = p; this._dirty = true; def.onPower(this, b, p); }
         }
       }
       const want = pistons.map(p => ({ p, pw: this._pistonPowered(p), k: K(p.x, p.y, p.z) }));
@@ -1383,10 +1408,11 @@ class World {
       for (const b of observers) {
         if (this.get(b.x, b.y, b.z) !== b) continue;
         const d = D[b.d], s = this.sig(b.x + d[0], b.y + d[1], b.z + d[2]);
-        if (b.seen === null || b.seen === undefined) { b.seen = s; continue; }
+        if (b.seen === null || b.seen === undefined) { b.seen = s; this._dirty = true; continue; }
         if (b.firePending || s !== b.seen) {
           b.firePending = false;
           b.seen = s;
+          this._dirty = true;
           if (!b.busy) {
             b.busy = true;
             this.at(now + 1, () => { b.on = true; });
@@ -1407,32 +1433,12 @@ class World {
   get quiet() { return this._quiet; }
   wake() { this._quiet = false; }
   _updateQuiet() {
-    const sig = this._quickSig();
-    let still = this.ev.length === 0 && sig === this._sig && this.vibs.length === 0;
+    let still = !this._dirty && this.ev.length === 0 && this.vibs.length === 0;
     if (still) for (const en of this.entities) {
       if (en.gone || en.stasis) continue;
       if (en.x !== en.px || en.y !== en.py || en.z !== en.pz || en.vx || en.vy || (en.vz && !en.ground)) { still = false; break; }
     }
-    this._sig = sig;
     this._quiet = still;
-  }
-  _quickSig() {
-    let total = this.c.size | 0;
-    for (const b of this.c.values()) {
-      let h = mix(defOf(b.t).id, K(b.x, b.y, b.z));
-      for (const f of SIG_FIELDS) {
-        const v = b[f];
-        if (v === undefined) continue;
-        h = mix(h, typeof v === 'number' ? Math.round(v * 64) : typeof v === 'string' ? strHash(v, 7) : v ? 1 : 0);
-      }
-      if (b.state) h = strHash(b.state, h);
-      total = (total + h) | 0;
-    }
-    for (const en of this.entities) {
-      if (en.gone) continue;
-      total = (total + mix(mix(mix(Math.round(en.x * 4096), Math.round(en.y * 4096)), Math.round(en.z * 4096)), Math.round((en.vx + en.vy + en.vz) * 4096))) | 0;
-    }
-    return total;
   }
 
   // Run until quiet. Returns the ticks run. Throws if it never settles, unless opts.lenient (then returns -1) or
