@@ -328,6 +328,47 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-dropdown');
+  {
+    const { page, errors } = await open(browser);
+    const dd = 'rs-dropdown';
+    await page.evaluate(() => document.querySelector('rs-dropdown').addEventListener('select', ev => window.__events.push({ type: 'select', value: ev.detail.value })));
+    await page.locator(dd).scrollIntoViewIfNeeded();
+    check('dropdown: menu button with aria-haspopup and aria-expanded false; items are menuitems in a menu', await page.$eval(dd, el => {
+      const hit = el.shadowRoot.querySelector('.hit');
+      return hit.getAttribute('aria-haspopup') === 'menu' && hit.getAttribute('aria-expanded') === 'false' &&
+        el.shadowRoot.querySelector('.window').getAttribute('role') === 'menu' && [...el.children].every(n => n.getAttribute('role') === 'menuitem');
+    }));
+    await page.locator(dd + ' >> .hit').click();
+    check('dropdown: a click opens it when the door is clear; focus on the first item', await until(page, s => document.querySelector(s).open === true, dd) &&
+      await page.evaluate(() => document.activeElement.textContent === 'Copy'));
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    check('dropdown: arrow keys wrap round the items', await page.evaluate(() => document.activeElement.textContent === 'Copy'));
+    await page.keyboard.press('d');
+    check('dropdown: typeahead', await page.evaluate(() => document.activeElement.textContent === 'Delete'));
+    await page.waitForTimeout(1100);   // the button is in for 10 ticks after the press
+    await page.keyboard.press('Enter');
+    check('dropdown: choosing an item presses the button; select fires with it once the door has shut', await until(page, () => window.__events.some(e => e.type === 'select')) &&
+      await page.$eval(dd, el => el.open === false) && (await events(page)).find(e => e.type === 'select').value === 'delete');
+    check('dropdown: focus returns to the menu button', await page.evaluate(() => document.activeElement.localName === 'rs-dropdown'));
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('ArrowDown');
+    check('dropdown: ArrowDown on the button opens it', await until(page, s => document.querySelector(s).open === true, dd));
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('Escape');
+    check('dropdown: Escape shuts it, no select', await until(page, s => document.querySelector(s).open === false, dd) && !(await events(page)).some(e => e.type === 'select'));
+    await page.waitForTimeout(1100);
+    await page.locator(dd + ' >> .hit').click();
+    await until(page, s => document.querySelector(s).open === true, dd);
+    await page.waitForTimeout(1100);
+    await page.mouse.click(1200, 20);
+    check('dropdown: a click outside shuts it', await until(page, s => document.querySelector(s).open === false && !document.querySelector(s).hasAttribute('data-deployed'), dd));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });
