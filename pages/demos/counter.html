@@ -1,0 +1,8 @@
+<section class="demo" data-tag="rs-counter">
+  <p>A stat number. Set <code>value</code> from page code: that moves books and quills in or out of one barrel per digit, and the number beside the machine is read back from the comparators. Here the button adds one.</p>
+  <!-- example -->
+  <rs-counter value="407">Blocks placed</rs-counter>
+  <rs-counter id="online" value="7" digits="2">Players online</rs-counter>
+  <button type="button" onclick="var c = document.getElementById('online'); c.value = (c.value + 1) % 100;">Add a player</button>
+  <!-- /example -->
+</section>

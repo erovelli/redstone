@@ -1,0 +1,9 @@
+/* rs-counter: before the element upgrades, show its caption and reserve the machine's height (three rows:
+   6 x 1 + 0.72 blocks). */
+rs-counter:not(:defined) {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  min-height: calc(var(--rs-block, 16px) * 6.72);
+  padding: 0 .4em;
+}
