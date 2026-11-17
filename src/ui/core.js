@@ -540,9 +540,12 @@ class RedstoneElement extends HTMLElement {
       // Like a native <label>: clicking the caption operates the primary control.
       root.querySelector('.caption').addEventListener('click', ev => {
         if (SYNTHETIC.has(ev)) return;
-        ev.stopPropagation();
         const pick = spec.captionControl ? spec.captionControl(this, ev) : null;
-        this._activate(pick || this._primary(), null, ev);
+        const control = pick || this._primary();
+        // With no control to operate (rs-list's items), the caption is ordinary page text: its clicks reach the page.
+        if (!control) return;
+        ev.stopPropagation();
+        this._activate(control, null, ev);
       });
     }
     this._windows = [...root.querySelectorAll('.window')];

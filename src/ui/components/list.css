@@ -1,0 +1,15 @@
+/* rs-list: before the element upgrades, the items show as an ordinary list indented by the column's width. */
+rs-list:not(:defined) {
+  display: block;
+  padding-left: calc(var(--rs-block, 12px) * 2.4);
+}
+rs-list:not(:defined) > li,
+rs-list:not(:defined) > ul > li,
+rs-list:not(:defined) > ol > li {
+  line-height: calc(var(--rs-block, 12px) * 2);
+}
+rs-list:not(:defined) > ul,
+rs-list:not(:defined) > ol {
+  margin: 0;
+  padding: 0;
+}
