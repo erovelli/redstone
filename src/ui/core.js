@@ -759,15 +759,15 @@ class RedstoneElement extends HTMLElement {
     }
     if (said.length) this._announce(said.join('. '));
   }
-  // spec.host: { role, aria: { valuenow: key | (state, el) => value } } on the element itself (ElementInternals
-  // where supported, else attributes the author has not set). null or undefined removes the property.
+  // spec.host: { role, aria: { valueNow: key | (state, el) => value } } on the element itself: ElementInternals
+  // (role, ariaValueNow, ...) where supported, else the attributes. null or undefined removes the property.
   _syncHost(host, state) {
     const set = (name, v) => {
-      const prop = name === 'role' ? 'role' : 'aria' + name.replace(/(^|-)([a-z])/g, (m, d, c) => c.toUpperCase());
+      const prop = name === 'role' ? 'role' : 'aria' + name[0].toUpperCase() + name.slice(1);
       const value = v === null || v === undefined ? null : String(v);
       if (this._internals && prop in this._internals) this._internals[prop] = value;
       else {
-        const attr = name === 'role' ? 'role' : 'aria-' + name;
+        const attr = name === 'role' ? 'role' : 'aria-' + name.toLowerCase();
         if (value === null) this.removeAttribute(attr);
         else this.setAttribute(attr, value);
       }

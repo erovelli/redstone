@@ -96,7 +96,7 @@ Redstone.ui.define('rs-toggle', {
 | `params` | `{ paramKey: mapping }` | How the builder's params come from the element. Missing keys use the entry's defaults. |
 | `label` | io key or `'beside'` | An io key places the light-DOM text (the default slot) on those sign blocks. `'beside'` sets it next to the machine as ordinary page text, like a native label; clicking it operates the primary control. Use `'beside'` for inline form controls and signs when the text is part of the machine (see SPEC I3). |
 | `readLabel` | boolean | Keep the sign text (`label: 'signs'`) readable to screen readers, for elements whose text is content rather than a control's name (chips, badges). Default: hidden, because the controls carry it. |
-| `host` | `{ role, aria }` | Role and ARIA on the element itself, through `ElementInternals` (attributes as a fallback): `role` is a string or `el => string`; `aria` maps `valuenow`, `busy`, ... to a state key or `(state, el) => value` (`null` removes it). For elements with no control of their own (`progressbar`, `status`). |
+| `host` | `{ role, aria }` | Role and ARIA on the element itself, through `ElementInternals` (attributes as a fallback): `role` is a string or `el => string`; `aria` maps `ElementInternals` names without the `aria` prefix (`valueNow`, `busy`, `label`) to a state key or `(state, el) => value` (`null` removes it). For elements with no control of their own (`progressbar`, `status`). |
 | `opening` | object or array | Slotted content shown through a world opening; see below. |
 | `controls` | array | Focusable controls over interactive blocks; see below. |
 | `state` | `{ key: output }` | Outputs: each becomes a property (and optionally an attribute, events, an announcement). |
