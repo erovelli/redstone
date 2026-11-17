@@ -454,6 +454,14 @@ function leverCycle(e){
 const testsOf = e => [...e.tests, T('builds at every parameter edge with valid box, io and controls', () => wellFormed(e)),
   ...(e.controls.some(c => c.kind==='lever' && c.io==='lever') ? [T('every block returns to its start after two lever cycles (every parameter edge)', () => leverCycle(e))] : [])];
 function runTests(e){ return testsOf(e).map(t => { const t0=Date.now(); let pass=false, err=null; try { pass = !!t.fn(); } catch(x){ err = String(x && x.message || x); } return { name:t.name, pass, err, ms:Date.now()-t0 }; }); }
-const api = { entries, CATEGORIES, defaults, testsOf, runTests };
+// Entries defined in their own files (src/contraptions/ui/*.js) add themselves here. A new category is appended.
+function register(entry){
+  if (!entry || !entry.id) throw new Error('Catalogue.register: entry needs an id');
+  if (entries.some(e => e.id === entry.id)) throw new Error(`Catalogue.register: duplicate id '${entry.id}'`);
+  if (!CATEGORIES.includes(entry.category)) CATEGORIES.push(entry.category);
+  entries.push(entry); return entry;
+}
+const get = id => entries.find(e => e.id === id) || null;
+const api = { entries, CATEGORIES, defaults, testsOf, runTests, register, get };
 if (N) module.exports = api; else window.Catalogue = api;
 })();
