@@ -24,7 +24,7 @@ const plaqueClear = (P) => P.bands.every(z0 => { for (let x=0;x<P.W;x++) for (le
 const entries = [
 { id:'lever-lamp', name:'Lever and lamp', category:'Toggles & logic',
   summary:'The simplest circuit: a lever powers dust, and the dust powers a lamp.',
-  inputs:['lever'], outputs:['lamp'], timing:'Lamp on in the same tick; off 1 tick after power drops.',
+  inputs:['lever'], outputs:['lamp'], timing:'Lamp on in the same tick; off 2 ticks after power drops.',
   notes:['Dust loses 1 level per block, so a lamp must be within 15 blocks of the source.'],
   controls:[{ kind:'lever', io:'lever', label:'Lever' }],
   build:() => Lg.leverLamp(),
@@ -40,7 +40,7 @@ const entries = [
 
 { id:'or-gate', name:'OR gate', category:'Toggles & logic',
   summary:'Two dust lines meet, so either input lights the lamp.',
-  inputs:['lever A','lever B'], outputs:['lamp (A OR B)'], timing:'Same tick on; off 1 tick after both drop.',
+  inputs:['lever A','lever B'], outputs:['lamp (A OR B)'], timing:'Same tick on; off 2 ticks after both drop.',
   notes:['Dust carries power both ways, so the inputs also feed each other. Put a repeater on each input if the sources must stay isolated.'],
   controls:[{ kind:'lever', io:'a', label:'Lever A' },{ kind:'lever', io:'b', label:'Lever B' }],
   build:() => Lg.orGate(),
@@ -57,22 +57,22 @@ const entries = [
 
 { id:'xor-gate', name:'XOR gate (comparator)', category:'Toggles & logic',
   summary:'A comparator in subtract mode takes A OR B at the rear and A AND B at the side, so the output is on when exactly one input is on.',
-  inputs:['lever A','lever B'], outputs:['lamp (A XOR B)'], timing:'One input: lamp on at +3. Adding the second: lamp off at +6 (the AND path is slower).',
+  inputs:['lever A','lever B'], outputs:['lamp (A XOR B)'], timing:'One input: lamp on at +3. Adding the second: lamp off at +7 (the AND path is slower, and a lamp turns off 2 ticks after it loses power).',
   notes:['XOR = (A OR B) - (A AND B). The AND torch also feeds the rear, which is harmless: it is only on when OR is.','Switching from one input to both can flash the output for a tick while the AND path catches up.'],
   controls:[{ kind:'lever', io:'a', label:'Lever A' },{ kind:'lever', io:'b', label:'Lever B' }],
   build:() => Lg.xorGate(),
   tests:[ T('truth table 0110', () => truth(Lg.xorGate, [0,1,1,0])),
           T('follows a sequence of inputs', () => { const c=Lg.xorGate(), w=c.world; w.run(5); return [[1,0,1],[1,1,0],[0,1,1],[0,0,0],[1,1,0],[1,0,1]].every(([a,b,q]) => { c.io.a.on=!!a; c.io.b.on=!!b; w.run(20); return !!c.io.lamp.lit===!!q; }); }),
-          T('timing: on at +3, off at +6 when the second input joins', () => { const c=Lg.xorGate(), w=c.world; w.run(5); c.io.a.on=true; const a=first(w,()=>c.io.lamp.lit); w.run(10); c.io.b.on=true; return a===3 && first(w,()=>!c.io.lamp.lit)===6; }) ] },
+          T('timing: on at +3, off at +7 when the second input joins', () => { const c=Lg.xorGate(), w=c.world; w.run(5); c.io.a.on=true; const a=first(w,()=>c.io.lamp.lit); w.run(10); c.io.b.on=true; return a===3 && first(w,()=>!c.io.lamp.lit)===7; }) ] },
 
 { id:'rs-latch', name:'Torch RS latch', category:'Toggles & logic',
   summary:'Two torches feeding each other remember a bit. Set turns the output on, reset turns it off, and it holds without power.',
-  inputs:['set button','reset button'], outputs:['Q (torch and lamp)'], timing:'Set: lamp on at +5. Reset: lamp off at +4.',
+  inputs:['set button','reset button'], outputs:['Q (torch and lamp)'], timing:'Set: lamp on at +5. Reset: lamp off at +5.',
   notes:['If set and reset are both held, both torches go dark and whichever input releases last wins.'],
   controls:[{ kind:'button', io:'set', label:'Set' },{ kind:'button', io:'reset', label:'Reset' }],
   build:() => Lg.rsLatch(),
   tests:[ T('set holds, reset holds', () => { const c=Lg.rsLatch(), w=c.world; w.run(3); const a=!c.io.lamp.lit; press(w,c.io.set); w.run(25); const b=c.io.lamp.lit; press(w,c.io.reset); w.run(25); return a && b && !c.io.lamp.lit; }),
-          T('timing: set +5, reset +4', () => { const c=Lg.rsLatch(), w=c.world; w.run(3); press(w,c.io.set); const a=first(w,()=>c.io.lamp.lit); w.run(25); press(w,c.io.reset); return a===5 && first(w,()=>!c.io.lamp.lit)===4; }) ] },
+          T('timing: set +5, reset +5', () => { const c=Lg.rsLatch(), w=c.world; w.run(3); press(w,c.io.set); const a=first(w,()=>c.io.lamp.lit); w.run(25); press(w,c.io.reset); return a===5 && first(w,()=>!c.io.lamp.lit)===5; }) ] },
 
 { id:'t-flip-flop', monitor:(c) => ({ state: c.io.block.x===10 ? 'on (block dropped)' : 'off (block home)' }), name:'T flip-flop (block dropping)', category:'Toggles & logic',
   summary:'One button toggles a lamp. A rising-edge detector makes a 1-tick pulse. On that pulse a sticky piston drops its redstone block on one press and grabs it back on the next.',
@@ -86,7 +86,7 @@ const entries = [
 
 { id:'sequencer', name:'Open/close sequencer', category:'Toggles & logic',
   summary:'Three outputs that switch in one order when opening and the reverse order when closing. Repeaters delay both edges equally, so this needs a torch AND gate and an OR.',
-  inputs:['lever'], outputs:['P1 (first to open, last to close)','P2 (middle)','P3 (last to open, first to close)'], timing:'Open: P1 at +5, P2 at +7, P3 at +12. Close: P3 at +3, P2 at +6, P1 at +12.',
+  inputs:['lever'], outputs:['P1 (first to open, last to close)','P2 (middle)','P3 (last to open, first to close)'], timing:'Open: P1 at +6, P2 at +8, P3 at +13 (the lamps turn off 2 ticks after losing power). Close: P3 at +3, P2 at +6, P1 at +12.',
   notes:['Outputs are high while closed.','P1 = NOT(L OR L+8), P2 = S+4, P3 = S OR S+8, where S = NOT L.','Another source (such as a latch) can drive it through a repeater at the inject cell.'],
   controls:[{ kind:'lever', io:'lever', label:'Lever' }],
   build:() => Lg.sequencer(),
@@ -94,9 +94,9 @@ const entries = [
       io.lever.on=true; const o=[0,0,0]; let t=0; for (;t<30;t++){ w.tick(); ['p1','p2','p3'].forEach((k,i)=>{ if (!o[i] && !io[k].lit) o[i]=t+1; }); }
       io.lever.on=false; const cl=[0,0,0]; for (t=0;t<30;t++){ w.tick(); ['p1','p2','p3'].forEach((k,i)=>{ if (!cl[i] && io[k].lit) cl[i]=t+1; }); }
       return o[0]<o[1] && o[1]<o[2] && cl[2]<cl[1] && cl[1]<cl[0]; }),
-          T('timing: open 5, 7, 12; close 3, 6, 12', () => { const c=Lg.sequencer(), w=c.world, io=c.io; w.run(5); io.lever.on=true; const o={}; for (let t=1;t<30;t++){ w.tick(); for (const k of ['p1','p2','p3']) if (o[k]==null && !io[k].lit) o[k]=t; }
+          T('timing: open 6, 8, 13; close 3, 6, 12', () => { const c=Lg.sequencer(), w=c.world, io=c.io; w.run(5); io.lever.on=true; const o={}; for (let t=1;t<30;t++){ w.tick(); for (const k of ['p1','p2','p3']) if (o[k]==null && !io[k].lit) o[k]=t; }
       io.lever.on=false; const cl={}; for (let t=1;t<30;t++){ w.tick(); for (const k of ['p1','p2','p3']) if (cl[k]==null && io[k].lit) cl[k]=t; }
-      return [o.p1,o.p2,o.p3,cl.p3,cl.p2,cl.p1].join()==='5,7,12,3,6,12'; }) ] },
+      return [o.p1,o.p2,o.p3,cl.p3,cl.p2,cl.p1].join()==='6,8,13,3,6,12'; }) ] },
 
 { id:'observer-pulse', name:'Observer pulse', category:'Clocks & pulses',
   summary:'An observer watching a lever emits a 1-tick pulse from its back every time the lever changes.',
@@ -117,7 +117,7 @@ const entries = [
 { id:'torch-clock', monitor:(c) => ({ period: `${2*(1+c.io.repeaters.reduce((n,r)=>n+r.delay,0))} ticks` }), name:'Torch clock', category:'Clocks & pulses',
   summary:'A torch on a block feeds two repeaters that loop back into the block, so the torch keeps turning itself off and on. A lever on the block stops it.',
   inputs:['stop lever','repeater delays (tap)'], outputs:['lamp blinking'], timing:'Period = 2 x (1 + repeater delays): 14 ticks at the default 3 + 3.',
-  notes:['In Java a torch burns out after about 8 flips in 30 redstone ticks, so keep the period at 8 ticks or more. The engine does not model burnout.','The lever powers the block directly, which holds the torch off.'],
+  notes:['A torch burns out on its 8th turn-off within 60 game ticks (30 redstone ticks), as in Java, so keep the period above 4 ticks.','The lever powers the block directly, which holds the torch off.'],
   controls:[{ kind:'lever', io:'lever', label:'Stop' },{ kind:'repeaters', io:'repeaters' }],
   build:() => Lg.torchClock(),
   tests:[ T('period is 2 x (1 + delays)', () => [[3,3],[2,4],[4,4]].every(d => { const c=Lg.torchClock(d), w=c.world; w.run(5); const ts=[]; let prev=c.io.torch.lit; for (let t=1;t<80;t++){ w.tick(); if (c.io.torch.lit!==prev){ prev=c.io.torch.lit; ts.push(t); } } const want=1+d[0]+d[1]; return ts.length>4 && ts.slice(1).every((t,i)=>t-ts[i]===want); })),
@@ -144,7 +144,7 @@ const entries = [
 { id:'comparator-subtractor', name:'Comparator subtractor', category:'Signals',
   summary:'A comparator reads barrel A at its rear and barrel B at its side, through a second comparator. In subtract mode it outputs A minus B; in compare mode it passes A unless B is stronger.',
   inputs:['barrel A fill','barrel B fill'], outputs:['signal A - B (subtract) or A / 0 (compare)'], timing:'2 ticks (two comparators).',
-  notes:['The front torch on the comparator is lit in subtract mode.','Only dust, repeaters and comparators count as side inputs.'],
+  notes:['The front torch on the comparator is lit in subtract mode.','Only dust, redstone blocks and the outputs of repeaters, comparators and observers count as side inputs.'],
   params:[{ key:'a', label:'Fill A', min:0, max:15, def:12 },{ key:'b', label:'Fill B', min:0, max:15, def:5 },{ key:'mode', label:'Mode', options:['subtract','compare'], def:'subtract' }],
   controls:[],
   build:(p) => Lg.subtractor(p.a, p.b, p.mode==='compare' ? 'cmp' : 'sub'),
