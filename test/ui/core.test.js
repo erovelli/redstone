@@ -84,6 +84,10 @@ module.exports = {
       const e = { params: [{ key: 'a', min: 0, max: 2, def: 1 }, { key: 'b', options: ['x', 'y'], def: 'x' }] };
       return ui.testing.edges(e).length === 6;
     }),
+    T('sameParams: a param read from a state attribute does not count as a change', () => {
+      const spec = { params: { open: { attr: 'open', type: 'boolean' }, rows: 'length' }, state: { open: { attr: 'open', set() {} } } };
+      return ui.sameParams(spec, { rows: 3, open: true }, { open: false, rows: 3 }) && !ui.sameParams(spec, { rows: 4, open: false }, { rows: 3, open: false });
+    }),
     T('testing.strictWorld: rejects legacy blocks and wiring links', () => {
       const w = new RS.World();
       w.put(0, 0, 0, 'stone');

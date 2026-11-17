@@ -89,6 +89,16 @@ function paramAttributes(spec) {
   return out;
 }
 
+// Params compared for a resize or slot change. A param read from a state attribute (`checked`, `open`) is read
+// only at build time, so it does not count: the world already holds that state, and rebuilding mid-move
+// would undo the player's action.
+function sameParams(spec, a, b) {
+  const stateAttrs = new Set(Object.values(spec.state || {}).map(s => s.attr).filter(Boolean));
+  const skip = new Set(Object.entries(spec.params || {}).filter(([, m]) => typeof m === 'object' && stateAttrs.has(m.attr)).map(([k]) => k));
+  const strip = o => JSON.stringify(Object.keys(o || {}).filter(k => !skip.has(k)).sort().map(k => [k, o[k]]));
+  return strip(a) === strip(b);
+}
+
 /* ---------- output -> state logic (pure) ---------- */
 
 const asList = v => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v]);
@@ -216,7 +226,7 @@ function signsFor(text, opts = {}) {
 }
 
 const ui = {
-  compat, coerce, paramsFor, paramAttributes, diffState, Controller, testing, signsFor,
+  compat, coerce, paramsFor, paramAttributes, sameParams, diffState, Controller, testing, signsFor,
   registry: new Map(),
 };
 
@@ -473,15 +483,16 @@ class RedstoneElement extends HTMLElement {
     const root = this.attachShadow({ mode: 'open', delegatesFocus: true });
     // label: an io key puts the text on those signs; 'beside' sets it next to the machine as ordinary page text.
     const beside = spec.label === 'beside';
-    const labelSlot = spec.label && !beside ? '<slot></slot>' : '';
+    // labelSlot names a slot for the sign text, so the default slot can go through an opening (rs-collapse).
+    const labelSlot = spec.label && !beside ? (spec.labelSlot ? `<slot name="${spec.labelSlot}"></slot>` : '<slot></slot>') : '';
     const openings = asList(spec.opening);
     const defaultInWindow = openings.some(o => !o.slot);
     root.innerHTML = `<style>${BASE_CSS}${spec.styles || ''}</style>
       <div class="box rs-own" part="box">
         <div class="stage" part="stage" aria-hidden="true"></div>
         <div class="label" part="label"${spec.readLabel ? '' : ' aria-hidden="true"'}>${labelSlot}</div>
-        ${openings.map((o, i) => `<div class="window" part="window" data-i="${i}" hidden><slot${o.slot ? ` name="${o.slot}"` : ''}></slot></div>`).join('')}
         <div class="controls"></div>
+        ${openings.map((o, i) => `<div class="window" part="window" data-i="${i}" hidden><slot${o.slot ? ` name="${o.slot}"` : ''}></slot></div>`).join('')}
       </div>
       ${beside ? '<span class="caption" part="label"><slot></slot></span>' : ''}
       ${!spec.label && !defaultInWindow ? '<div class="stash"><slot></slot></div>' : ''}
@@ -556,7 +567,7 @@ class RedstoneElement extends HTMLElement {
     queueMicrotask(() => {
       this._rebuildQueued = false;
       if (!this.isConnected || !this._ctl) return;
-      if (onlyIfParamsChanged && JSON.stringify(this._params()) === JSON.stringify(this._ctl.params)) return;
+      if (onlyIfParamsChanged && sameParams(this._def.spec, this._params(), this._ctl.params)) return;
       this._build();
     });
   }
@@ -665,6 +676,9 @@ class RedstoneElement extends HTMLElement {
     return labels.map(l => l.textContent.trim()).join(' ');
   }
   _syncNames() {
+    // labelFallback(el): text shown on the signs when nothing is slotted into labelSlot (a summary attribute).
+    const fallback = this._def.spec.labelFallback && this._labelEl && this._labelEl.querySelector('slot');
+    if (fallback) fallback.textContent = this._def.spec.labelFallback(this);
     const name = this._labelText();
     for (const c of this._controls || []) {
       const label = typeof c.spec.label === 'function' ? c.spec.label(this) : c.spec.label || name;

@@ -1,0 +1,10 @@
+/* rs-collapse: before the element upgrades, the body shows as ordinary content under its summary. */
+rs-collapse:not(:defined) {
+  display: block;
+  min-height: calc(var(--rs-block, 32px) * 4.16);
+}
+rs-collapse:not(:defined)::before {
+  content: attr(summary);
+  display: block;
+  font-weight: 600;
+}
