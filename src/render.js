@@ -1365,105 +1365,6 @@ function emit(v, kind, x, y, z, o = {}) {
 }
 
 /* =====================================================================================================
-   Navigation wall: the pearl launcher, drawn at block scale; flying pearls and notes on a page overlay.
-   ===================================================================================================== */
-
-// The note particle's colour for a pitch 0..24, as the game computes it.
-function noteColor(pitch) {
-  const p = pitch / 24;
-  const c = o => Math.round(255 * Math.max(0, Math.sin((p + o) * Math.PI * 2) * 0.65 + 0.35));
-  return `rgb(${c(0)},${c(1 / 3)},${c(2 / 3)})`;
-}
-
-// Draw an atlas sprite onto any canvas context in CSS px (used for the page overlay).
-function overlaySprite(ctx, dpr, tex, x, y, size, o = {}) {
-  const img = variant(tex, 0, 0, o.tint, 1, 0);
-  const X0 = Math.round((x - size / 2) * dpr);
-  const Y0 = Math.round((y - size / 2) * dpr);
-  const n = Math.round(size * dpr);
-  ctx.globalAlpha = o.alpha === undefined ? 1 : o.alpha;
-  ctx.drawImage(img, 0, 0, img.width, img.height, X0, Y0, n, n);
-  ctx.globalAlpha = 1;
-}
-
-function makeNavView(stage, L, opt = {}) {
-  const VB = opt.B || 24;
-  const T = Math.max(2, Math.round(VB * 0.14));
-  const v = makeView(stage, L, {
-    B: VB,
-    T,
-    inspect: opt.inspect,
-    skip: b => b.buried,
-    tint: b => (b.t === 'rblock' ? 0.45 : b.y < 0 ? Math.min(0.6, -b.y * 0.2) : 0),
-  });
-  // Pearls held in their chambers are drawn in the wall; a released pearl flies on the page overlay.
-  v.entityFilter = en => en.visible === false;
-  const [x0, , y0, , , z1] = L.box;
-  const sky = opt.overlay;
-  const base = v.draw;
-  stage.style.height = '';
-  v.nav = true;
-  const at = (X, Y, Z) => ({ x: (X - x0) * VB, y: (z1 + 1 - Z) * VB + (Y - y0) * T });
-  // Viewport position of an entity's centre, for detecting when the pearl leaves the screen.
-  v.screenOf = en => {
-    const r = v.ctx.canvas.getBoundingClientRect();
-    const q = at(en.x, en.y, en.z);
-    return { x: r.left + q.x, y: r.top + q.y - VB * 0.2, r: VB * 0.2 };
-  };
-  v.draw = now => {
-    if (now === undefined) now = performance.now();
-    base(now);
-    for (const snd of L.sounds || []) {
-      if (snd.seen === undefined) {
-        snd.seen = now;
-        if (opt.onSound) opt.onSound(snd);
-      }
-    }
-    if (L.sounds && L.sounds.length > 16) L.sounds.splice(0, L.sounds.length - 4);
-    if (!sky) return;
-    const sdpr = Math.min(3, window.devicePixelRatio || 1);
-    const sctx = sky.getContext('2d');
-    if (sky.width !== Math.round(innerWidth * sdpr) || sky.height !== Math.round(innerHeight * sdpr)) {
-      sky.width = Math.round(innerWidth * sdpr);
-      sky.height = Math.round(innerHeight * sdpr);
-      sky.style.width = innerWidth + 'px';
-      sky.style.height = innerHeight + 'px';
-    }
-    sctx.setTransform(1, 0, 0, 1, 0, 0);
-    sctx.imageSmoothingEnabled = false;
-    sctx.clearRect(0, 0, sky.width, sky.height);
-    const r = v.ctx.canvas.getBoundingClientRect();
-    const p = reduce ? 1 : clamp((now - v.tickAt) / TICK, 0, 1);
-    let busy = false;
-    // Note particles: every note a cover plays floats up from that block, coloured by pitch as in the game.
-    for (const n of L.notes || []) {
-      if (n.seen === undefined) {
-        n.seen = now;
-        if (opt.onNote && n.k === undefined) opt.onNote(n);
-      }
-      const age = (now - n.seen) / 700;
-      if (age >= 1) continue;
-      const q = at(n.x + 0.5, 0, n.z + 1 + age * 0.8);
-      overlaySprite(sctx, sdpr, 'particle/note', r.left + q.x, r.top + q.y, VB * 0.8, { tint: noteColor(n.pitch), alpha: 1 - age });
-      busy = true;
-    }
-    if (L.notes && L.notes.length > 48) {
-      const keep = L.notes.filter(n => n.seen === undefined || now - n.seen < 700);
-      L.notes.length = 0;
-      L.notes.push(...keep);
-    }
-    for (const en of v.world.entities) {
-      if (en.gone || !en.visible) continue;
-      const q = at(...entityAt(en, p, v.world.t));
-      if (Math.hypot(en.vx, en.vy, en.vz) > 0.001 || en.x !== en.px || en.z !== en.pz) busy = true;
-      overlaySprite(sctx, sdpr, 'item/ender_pearl', r.left + q.x, r.top + q.y - VB * 0.3, VB * 0.6);
-    }
-    if (busy) v.moving = true;
-  };
-  return v;
-}
-
-/* =====================================================================================================
    Workbench helpers (legacy API, kept for pages/catalogue-app.js)
    ===================================================================================================== */
 
@@ -1594,8 +1495,8 @@ function markTick() {
 }
 
 window.RSR = {
-  makeNavView, dirtTexture, markTick, makeView, removeView, hitAt, layer, tag, views, walkers, setScale, readPal,
-  startLoop, tick, pressButton, addWalker, stepWalkers, sculkHits, defineModel, emit, dustColor, noteColor,
+  dirtTexture, markTick, makeView, removeView, hitAt, layer, tag, views, walkers, setScale, readPal,
+  startLoop, tick, pressButton, addWalker, stepWalkers, sculkHits, defineModel, emit, dustColor,
   models,
   geom: { attBox, dirBox, rotY, orientedFaces, edgeSlab },
   get textures() { return TX; },
