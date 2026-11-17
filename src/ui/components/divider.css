@@ -1,0 +1,8 @@
+/* rs-divider: before the element upgrades, a plain rule of about the same height (1 + 0.72 + 0.25 blocks). */
+rs-divider:not(:defined) {
+  display: block;
+  height: calc(var(--rs-block, 16px) * 1.97);
+  margin: .6em 0;
+  box-sizing: border-box;
+  border-bottom: calc(var(--rs-block, 16px) * 1.72) solid rgba(128, 128, 128, .35);
+}

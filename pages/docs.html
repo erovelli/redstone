@@ -293,7 +293,7 @@ footer{ margin-top:60px; padding-top:16px; border-top:1px solid var(--line); fon
       (strict ? '<span class="badge strict" title="Honours rules R1 to R6">strict</span>' : '<span class="badge dev">' + devs.length + ' deviation' + (devs.length === 1 ? '' : 's') + '</span>') + '</div>' +
       '<p class="mech">' + esc(e.summary || '') + '</p>' +
       '<dl class="facts"><dt>player action</dt><dd>' + esc((e.actions || []).join(', ') || 'none') + '</dd><dt>output</dt><dd>' + esc((e.outputs || []).join(', ')) + '</dd>' +
-      (e.timing ? '<dt>timing</dt><dd>' + esc(e.timing) + '</dd>' : '') + (d.keys.length ? '<dt>keys</dt><dd>' + esc(d.keys.join(', ')) + '</dd>' : '<dt>keys</dt><dd>Tab to the control, Space or Enter to use it</dd>') + '</dl>' +
+      (e.timing ? '<dt>timing</dt><dd>' + esc(e.timing) + '</dd>' : '') + (d.keys.length ? '<dt>keys</dt><dd>' + esc(d.keys.join(', ')) + '</dd>' : d.actions.length ? '<dt>keys</dt><dd>Tab to the control, Space or Enter to use it</dd>' : '') + '</dl>' +
       (devs.length ? '<ul class="devs">' + devs.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '');
     sec.appendChild(prose);
     var bench = document.createElement('div'); bench.className = 'bench panel';
