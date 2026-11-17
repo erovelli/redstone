@@ -275,6 +275,59 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-tooltip and rs-popover');
+  {
+    const { page, errors } = await open(browser);
+    const tip = 'rs-tooltip[for="tip-save"]', save = '#tip-save';
+    await page.locator(save).scrollIntoViewIfNeeded();
+    check('tooltip: role tooltip, the target is described by it', await page.$eval(tip, el => el._internals.role === 'tooltip' && document.getElementById('tip-save').getAttribute('aria-describedby') === el.id));
+    await page.locator(save).hover();
+    check('tooltip: pointing at the target uncovers the signs', await until(page, s => document.querySelector(s).open === true, tip));
+    check('tooltip: the tip sits next to its target, on screen', await page.$eval(tip, el => {
+      const b = el.shadowRoot.querySelector('.box').getBoundingClientRect(), t = document.getElementById('tip-save').getBoundingClientRect();
+      return (b.bottom <= t.top + 1 || b.top >= t.bottom - 1) && b.left >= 0 && b.right <= innerWidth && getComputedStyle(el.shadowRoot.querySelector('.label')).visibility === 'visible';
+    }));
+    let ev = await events(page);
+    check('tooltip: toggle fired once', ev.filter(e => e.type === 'toggle' && e.tag === 'rs-tooltip').length === 1, ev);
+    await page.mouse.move(2, 600);
+    check('tooltip: leaving covers it again after the plate releases', await until(page, s => document.querySelector(s).open === false && !document.querySelector(s).hasAttribute('data-deployed'), tip));
+    await page.locator(save).focus();
+    check('tooltip: focus shows it', await until(page, s => document.querySelector(s).open === true, tip));
+    await page.keyboard.press('Escape');
+    check('tooltip: Escape dismisses it while focus stays', await until(page, s => document.querySelector(s).open === false, tip) && await page.evaluate(() => document.activeElement.id === 'tip-save'));
+    const wrap = 'rs-tooltip[tip]';
+    await page.locator(wrap + ' button').hover();
+    check('tooltip: wrapping its target works, with aria-description', await until(page, s => document.querySelector(s).open === true, wrap) && await page.$eval(wrap + ' button', b => b.getAttribute('aria-description') === 'Ctrl+Z'));
+    await page.mouse.move(2, 600);
+
+    const pop = 'rs-popover', ptrig = '#rs-popover .live > button';
+    await page.locator(ptrig).scrollIntoViewIfNeeded();
+    await events(page);
+    check('popover: trigger has aria-expanded false and aria-controls', await page.$eval(ptrig, b => b.getAttribute('aria-expanded') === 'false' && b.getAttribute('aria-controls') === document.querySelector('rs-popover').id));
+    await page.locator(ptrig).click();
+    check('popover: a click opens it (open follows the door)', await until(page, s => document.querySelector(s).open === true, pop));
+    check('popover: aria-expanded follows', await page.$eval(ptrig, b => b.getAttribute('aria-expanded') === 'true'));
+    await page.locator(ptrig).click();
+    check('popover: clicking the trigger again closes it', await until(page, s => document.querySelector(s).open === false, pop));
+    await until(page, s => !document.querySelector(s).hasAttribute('data-deployed'), pop);
+    await page.locator(ptrig).focus();
+    await page.keyboard.press('Enter');
+    check('popover: keyboard opens it', await until(page, s => document.querySelector(s).open === true, pop));
+    await page.keyboard.press('Tab');
+    check('popover: Tab from the trigger reaches the close control', await page.evaluate(() => document.activeElement.localName === 'rs-popover'));
+    await page.keyboard.press('Escape');
+    check('popover: Escape closes it and focus returns to the trigger', await until(page, s => document.querySelector(s).open === false, pop) && await page.evaluate(s => document.activeElement === document.querySelector(s), ptrig));
+    await until(page, s => !document.querySelector(s).hasAttribute('data-deployed'), pop);
+    await page.locator(ptrig).click();
+    await until(page, s => document.querySelector(s).open === true, pop);
+    await page.mouse.click(1200, 20);
+    check('popover: a click outside closes it', await until(page, s => document.querySelector(s).open === false, pop));
+    ev = await events(page);
+    check('popover: toggle events come from the door', ev.filter(e => e.type === 'toggle' && e.tag === 'rs-popover').length === 6, ev);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });

@@ -16,6 +16,7 @@ const STYLES = `
     justify-content: center; max-width: none; background: var(--rs-backdrop, rgba(12, 8, 4, .6)); }
   :host(:not([data-deployed])) { visibility: hidden; pointer-events: none; background: none; }
   @media (max-width: 420px) { :host { --rs-block: 30px; } }
+  .rs-x { font-size: calc(var(--b) * .5); }
   .window { padding: .5em .8em; box-sizing: border-box; background: var(--rs-window-bg, #fbf7ea); color: var(--rs-window-ink, #1b120a); }
 `;
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable=""], [contenteditable="true"]';
