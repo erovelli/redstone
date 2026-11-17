@@ -147,6 +147,15 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-button signs (SPEC I3)');
+  for (const width of [1280, 320]) {
+    const { page, errors } = await open(browser, { viewport: { width, height: 900 } });
+    const sizes = await page.$$eval('rs-button', els => els.map(el => parseFloat(getComputedStyle(el.shadowRoot.querySelector('.label')).fontSize)));
+    check(`sign text is at least 12 CSS px at ${width} px`, sizes.length > 0 && sizes.every(s => s >= 12), sizes);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nreduced motion');
   {
     const { page, errors } = await open(browser, { reducedMotion: 'reduce' });
