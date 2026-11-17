@@ -1,0 +1,17 @@
+<section class="demo" data-tag="rs-radio">
+  <p>A radio group with native semantics: one <code>value</code>, arrow keys move between options and choose as they go, and a <code>name</code> submits the chosen value. The markup is a <code>&lt;select&gt;</code>'s, so it reads as a list without the script. Press a second option before the first has settled and the one pressed last wins.</p>
+  <!-- example -->
+  <form class="demo-form" action="#">
+    <rs-radio name="size" value="m" required>
+      <option value="s">Small</option>
+      <option value="m">Medium</option>
+      <option value="l">Large</option>
+    </rs-radio>
+    <rs-radio name="day" required>
+      <option>Mon</option><option>Tue</option><option>Wed</option>
+      <option>Thu</option><option>Fri</option><option>Sat</option>
+    </rs-radio>
+    <button type="submit">Send</button>
+  </form>
+  <!-- /example -->
+</section>

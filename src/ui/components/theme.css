@@ -1,0 +1,10 @@
+/* rs-theme: before the element upgrades, show the label and reserve the contraption's height
+   (2 blocks tall, 1 row deep: 2 x 1 + 0.72 blocks). */
+rs-theme:not(:defined) {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  box-sizing: border-box;
+  min-height: calc(var(--rs-block, 24px) * 2.72);
+  padding: 0 .4em;
+}

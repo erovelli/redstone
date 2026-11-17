@@ -12,6 +12,10 @@ Redstone.ui.define('rs-button', {
 
   label: 'signs',
 
+  // SPEC I3: sign text is 0.4 of a block, so the default block is 32 px (12.8 px text). An author can still set
+  // --rs-block on the element; the signs are sized from the measured caption, so a longer caption gets more signs.
+  styles: ':host { --rs-block: 32px; }',
+
   controls: [
     { io: 'button', act: 'press', role: 'button', area: ['button', 'signs'] },
   ],

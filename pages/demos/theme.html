@@ -1,0 +1,7 @@
+<section class="demo" data-tag="rs-theme">
+  <p>A dark-mode switch for the whole page: <code>data-theme</code> on <code>&lt;html&gt;</code> is <code>light</code> while the lamp is lit and <code>dark</code> while it is out. The choice is stored in <code>localStorage</code>, and the next visit starts from it (or from <code>prefers-color-scheme</code>). This switch and the one in the page header stay in step, each through its own lever. Style the page with <code>:root[data-theme="dark"]</code>. To avoid a flash, set the attribute from storage in a small script in <code>&lt;head&gt;</code>, as this page does.</p>
+  <p>With <code>auto</code> (<code>&lt;rs-theme auto&gt;Daylight&lt;/rs-theme&gt;</code>), a daylight detector drives the lamp and the sky follows the system colour scheme. It is not shown live here because it would take the page away from the header switch.</p>
+  <!-- example -->
+  <rs-theme>Lights</rs-theme>
+  <!-- /example -->
+</section>

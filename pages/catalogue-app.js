@@ -10,12 +10,9 @@ const scaleFor = w => Math.max(16, Math.min(26, Math.floor(w/18)));
 let results = {};   // id -> test results
 R.setScale(scaleFor(width()));
 
-/* theme lever */
-let stored = null; try { stored = localStorage.getItem('rs-theme'); } catch(e){}
-const th = Logic.leverLamp(); th.io.lever.on = stored ? stored==='light' : !matchMedia('(prefers-color-scheme: dark)').matches; th.world.run(3);
-root.dataset.theme = th.io.lamp.lit ? 'light' : 'dark'; R.readPal();
-const tv = R.makeView($('#theme-stage'), th, { onTick: () => { const want = th.io.lamp.lit ? 'light' : 'dark'; if (root.dataset.theme !== want){ root.dataset.theme = want; try { localStorage.setItem('rs-theme', want); } catch(e){} R.readPal(); refreshPresentation(); } } });
-tv.persistent = true; R.hitAt(tv, 0,0,0, 'Light switch lever', () => { th.io.lever.on = !th.io.lever.on; });
+/* theme: an <rs-theme> in the header (lever and lamp) sets data-theme; the bench re-reads its palette when it changes */
+R.readPal();
+$('#theme').addEventListener('change', () => { R.readPal(); refreshPresentation(); });
 
 /* main nav: <rs-navbar>, one ender pearl launcher per destination. The workbench routes by hash, so it cancels
    rs-navigate (fired when the pearl has left the screen), shows the "Downloading terrain" screen and routes. */
@@ -260,11 +257,10 @@ addEventListener('keydown', ev => { if (!bench || ['INPUT','SELECT','TEXTAREA'].
   if (ev.key === '.' && bench.paused) tickView(bench.view);
   if (ev.key === 'r' || ev.key === 'R') bench.mount(); });
 
-/* loop: bench honors pause and speed; theme ticks normally */
+/* loop: the bench honors pause and speed (the nav and theme components tick themselves) */
 function tickView(v){ v.world.tick(); if (v.onTick) v.onTick(); R.markTick(); v.draw(performance.now()); }
-let last = performance.now(), themeAcc = 0;
+let last = performance.now();
 setInterval(() => { const now = performance.now(), dt = now - last; last = now;
-  themeAcc += dt; while (themeAcc >= 100){ themeAcc -= 100; tickView(tv); }
   if (bench && bench.view && !bench.paused){ bench.acc += dt * bench.speed; let n = 0; while (bench.acc >= 100 && n++ < 8){ bench.acc -= 100; tickView(bench.view); } }
 }, 25);
 const frame = now => { for (const v of R.views) if (v.anim) v.draw(now); requestAnimationFrame(frame); };

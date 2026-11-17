@@ -147,6 +147,15 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-button signs (SPEC I3)');
+  for (const width of [1280, 320]) {
+    const { page, errors } = await open(browser, { viewport: { width, height: 900 } });
+    const sizes = await page.$$eval('rs-button', els => els.map(el => parseFloat(getComputedStyle(el.shadowRoot.querySelector('.label')).fontSize)));
+    check(`sign text is at least 12 CSS px at ${width} px`, sizes.length > 0 && sizes.every(s => s >= 12), sizes);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nreduced motion');
   {
     const { page, errors } = await open(browser, { reducedMotion: 'reduce' });
@@ -222,6 +231,114 @@ async function main() {
     check('status: setting on lights the lamp and reflects the attribute', st.join() === 'true,true', st);
     check('no console errors', errors.length === 0, errors);
     await page.close();
+  }
+
+  console.log('\nrs-checkbox in a form (validity, reset, label, keyboard, set while the button is in)');
+  {
+    const { page, errors } = await open(browser);
+    const terms = 'rs-checkbox[name="terms"]', news = 'rs-checkbox[name="news"]';
+    await page.locator(terms).scrollIntoViewIfNeeded();
+    check('required and unchecked: invalid, valueMissing', await page.$eval(terms, el => !el.checkValidity() && el.validity.valueMissing && !el.form.checkValidity()));
+    check('starts with news checked in FormData', await page.$eval(news, el => new FormData(el.form).get('news') === 'on' && new FormData(el.form).get('terms') === null));
+    const same = await page.$eval(terms, el => { el.shadowRoot.querySelector('.hit').click(); return el.checked; });
+    check('a click does not change checked directly', same === false);
+    check('checked follows the bulb', await until(page, s => document.querySelector(s).checked === true, terms));
+    check('valid once checked; value submitted', await page.$eval(terms, el => el.checkValidity() && new FormData(el.form).get('terms') === 'yes'));
+    check('role checkbox and aria-checked', await page.$eval(terms, el => { const b = el.shadowRoot.querySelector('.hit'); return b.getAttribute('role') === 'checkbox' && b.getAttribute('aria-checked') === 'true'; }));
+    const ev = await events(page);
+    check('one input and one change', ev.filter(e => e.name === 'terms' && e.type === 'change').length === 1 && ev.filter(e => e.name === 'terms' && e.type === 'input').length === 1, ev);
+    // The button is still in (10 ticks): setting checked must still land, through a second press once it is out.
+    check('el.checked = false right after a press still lands', await page.$eval(terms, el => { el.checked = false; return el.checked === false && !el.contraption.io.bulb.lit; }));
+    await page.locator(news + ' >> .hit').focus();
+    await page.keyboard.press('Space');
+    check('keyboard Space presses the button', await until(page, s => document.querySelector(s).checked === false, news));
+    await page.$eval(news, el => el.form.reset());
+    check('form reset rebuilds from the starting attributes', await until(page, s => document.querySelector(s).checked === true, news));
+    await page.$eval(terms, el => {
+      const l = document.createElement('label');
+      el.id = 'terms-box';
+      l.htmlFor = 'terms-box';
+      l.id = 'terms-label';
+      l.textContent = 'Terms';
+      el.form.appendChild(l);
+    });
+    await page.click('#terms-label');
+    check('a <label for> click presses the button', await until(page, s => document.querySelector(s).checked === true, terms));
+    check('disabled: a click does nothing', await page.$eval('rs-checkbox[name="beta"]', el => { el.click(); return el.shadowRoot.querySelector('.hit').disabled && !el.contraption.io.button.on; }));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
+  console.log('\nrs-radio (latch bank, roving focus, caption clicks, form)');
+  {
+    const { page, errors } = await open(browser);
+    const size = 'rs-radio[name="size"]', day = 'rs-radio[name="day"]';
+    await page.locator(size).scrollIntoViewIfNeeded();
+    check('starts at its value attribute; FormData has it', await page.$eval(size, el => el.value === 'm' && new FormData(el.form).get('size') === 'm'));
+    check('required and unchosen: valueMissing', await page.$eval(day, el => el.value === '' && el.validity.valueMissing));
+    check('one tab stop: the chosen option', await page.$eval(size, el => [...el.shadowRoot.querySelectorAll('.hit')].map(b => b.tabIndex).join() === '-1,0,-1,-1,-1,-1'));
+    check('extra controls hidden; three radios named by option', await page.$eval(size, el => {
+      const b = [...el.shadowRoot.querySelectorAll('.hit')].filter(x => !x.hidden);
+      return b.length === 3 && b.every(x => x.getAttribute('role') === 'radio') && b[2].getAttribute('aria-label') === 'Large';
+    }));
+    const same = await page.$eval(size, el => { el.shadowRoot.querySelectorAll('.hit')[2].click(); return el.value; });
+    check('a click does not change value directly', same === 'm');
+    check('value follows the latches', await until(page, s => document.querySelector(s).value === 'l', size));
+    let ev = await events(page);
+    check('one input and one change', ev.filter(e => e.type === 'change' && e.name === 'size').length === 1 && ev.filter(e => e.type === 'input' && e.name === 'size').length === 1, ev);
+    check('exactly one lamp lit, aria-checked on Large', await until(page, s => document.querySelector(s).contraption.io.lamps.filter(l => l.lit).length === 1, size) && await page.$eval(size, el => el.contraption.io.lamps.filter(l => l.lit).length === 1 && el.shadowRoot.querySelectorAll('.hit')[2].getAttribute('aria-checked') === 'true'));
+    await page.locator(size + ' >> .hit >> nth=2').focus();
+    await page.keyboard.press('ArrowDown');
+    check('ArrowDown wraps to the first option, focuses and chooses it', await until(page, s => document.querySelector(s).value === 's', size) &&
+      await page.$eval(size, el => el.shadowRoot.activeElement === el.shadowRoot.querySelectorAll('.hit')[0]));
+    await page.keyboard.press('ArrowUp');
+    check('ArrowUp wraps back to the last', await until(page, s => document.querySelector(s).value === 'l', size));
+    await page.locator(size).getByText('Medium').click();
+    check('clicking an option label chooses that option', await until(page, s => document.querySelector(s).value === 'm', size));
+    // Two clicks a tick apart: the second wins.
+    await page.$eval(day, el => { const b = el.shadowRoot.querySelectorAll('.hit'); b[0].click(); setTimeout(() => b[5].click(), 110); });
+    check('a second click before the first settles wins', await until(page, s => document.querySelector(s).value === 'Sat', day));
+    await page.waitForTimeout(800);
+    check('and only its lamp is lit', await page.$eval(day, el => el.value === 'Sat' && el.contraption.io.lamps.filter(l => l.lit).length === 1));
+    check('el.value = "Tue" settles at once', await page.$eval(day, el => { el.value = 'Tue'; return el.value === 'Tue' && el.contraption.io.lamps[1].lit; }));
+    await page.$eval(day, el => el.form.reset());
+    check('form reset returns both groups to their starting attributes', await until(page, s => { const [a, b] = document.querySelectorAll(s); return a.value === 'm' && b.value === ''; }, 'rs-radio'));
+    await page.$eval(size, el => el.setAttribute('disabled', ''));
+    await page.$eval(size, el => el.shadowRoot.querySelectorAll('.hit')[0].click());
+    await page.waitForTimeout(700);
+    check('disabled: no presses', await page.$eval(size, el => el.value === 'm' && !el.contraption.io.buttons.some(b => b.on)));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
+  console.log('\nrs-theme (docs header, gallery, storage, workbench)');
+  {
+    const { page, errors } = await open(browser, { colorScheme: 'dark' });
+    check('starts from prefers-color-scheme: dark', await page.evaluate(() => document.documentElement.dataset.theme === 'dark' && document.querySelector('#lights').theme === 'dark'));
+    const g = '#rs-theme rs-theme';
+    await page.locator(g).scrollIntoViewIfNeeded();
+    await page.locator(g + ' >> .hit').click();
+    check('the gallery switch lights its lamp and the page turns light', await until(page, () => document.documentElement.dataset.theme === 'light'));
+    check('stored, and the header switch follows through its own lever', await page.evaluate(() => localStorage.getItem('rs-theme') === 'light' && document.querySelector('#lights').contraption.io.lever.on === true));
+    await page.reload();
+    check('a reload starts from the stored choice', await page.evaluate(() => document.documentElement.dataset.theme === 'light' && document.querySelector('#lights').theme === 'light'));
+    // Auto: a daylight detector; the sky follows the system colour scheme as it changes.
+    await page.evaluate(() => { const t = document.createElement('rs-theme'); t.setAttribute('auto', ''); t.id = 'auto-theme'; t.textContent = 'Daylight'; document.body.appendChild(t); });
+    check('auto: starts from the system scheme (dark) and has no control', await page.evaluate(() => { const t = document.querySelector('#auto-theme'); return t.theme === 'dark' && t.contraption.io.detector && t.shadowRoot.querySelector('.hit').hidden; }));
+    await page.emulateMedia({ colorScheme: 'light' });
+    check('auto: follows the system scheme as it changes', await until(page, () => document.querySelector('#auto-theme').theme === 'light' && document.documentElement.dataset.theme === 'light'));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+    const wb = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const wbErrors = [];
+    wb.on('pageerror', e => wbErrors.push(String(e)));
+    wb.on('console', m => { if (m.type() === 'error') wbErrors.push(m.text()); });
+    await wb.goto(URL.replace('index.html', 'catalogue.html'));
+    const t0 = await wb.evaluate(() => document.documentElement.dataset.theme);
+    await wb.locator('#theme >> .hit').click();
+    check('workbench: its rs-theme switches the page', await until(wb, t => document.documentElement.dataset.theme !== t, t0));
+    check('workbench: no console errors', wbErrors.length === 0, wbErrors);
+    await wb.close();
   }
 
   console.log('\nnarrow and dark');
