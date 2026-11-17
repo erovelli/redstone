@@ -1,0 +1,5 @@
+/* rs-modal: before the element upgrades it is hidden, like a closed <dialog>; with the open attribute it shows its
+   content in a plain bordered box. */
+rs-modal:not(:defined) { display: none; }
+rs-modal:not(:defined)[open] { display: block; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 2147482000; max-width: calc(100vw - 32px); padding: 1em; border: 2px solid currentColor; background: Canvas; color: CanvasText; }

@@ -461,6 +461,9 @@ class RedstoneElement extends HTMLElement {
   get label() { return this._labelText(); }
   // Re-read --rs-block and the container width after a change the element cannot observe (an ancestor's CSS).
   refresh() { this._resized(); }
+  // A player action from outside the element's controls (a trigger elsewhere on the page, a method such as
+  // showModal()): act(hand, io, built). Like a control: ignored while disabled, settled at once with reduced motion.
+  perform(act) { this._activate({ act }, null, null); }
 
   formDisabledCallback(disabled) {
     this._formDisabled = disabled;

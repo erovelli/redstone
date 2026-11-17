@@ -104,7 +104,7 @@ Redstone.ui.define('rs-toggle', {
 | `state` | `{ key: output }` | Outputs: each becomes a property (and optionally an attribute, events, an announcement). |
 | `form` | `{ value(el) }` | Form value after every state change (`null` = not submitted). Elements are always form-associated. |
 | `changed(el, change)` | function | Runs after a change's events were dispatched (not for silent changes). `change.dispatched` holds the events, so you can honour `defaultPrevented` (rs-button submits its form here). |
-| `methods` | `{ name: function }` | Extra prototype methods (`this` is the element). |
+| `methods` | `{ name: function }` | Extra prototype methods (`this` is the element). A method that performs a player action calls `this.perform((hand, io, built) => ...)`: like a control, it is ignored while disabled and settles at once with reduced motion (rs-modal's `showModal()`, its page-wide `data-rs-open` triggers). |
 | `styles` | CSS string | Extra CSS inside the shadow root. Parts: `box`, `stage`, `label`, `window`, `control`. |
 | `observe` | string[] | Extra attributes that rebuild the contraption when they change. |
 | `docs` | `{ attributes, properties, events }` | Extra `{ name: description }` rows for the docs tables. |

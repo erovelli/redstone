@@ -224,6 +224,57 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-modal: trigger, focus trap and return, Escape, backdrop, data-rs-close, reduced motion');
+  {
+    const { page, errors } = await open(browser);
+    const dlg = '#hello', trigger = 'button[data-rs-open="hello"]';
+    await page.evaluate(() => document.getElementById('hello').addEventListener('close', () => window.__events.push({ type: 'close', tag: 'rs-modal' })));
+    await page.locator(trigger).scrollIntoViewIfNeeded();
+    check('modal: starts closed, hidden, role dialog and aria-modal', await page.$eval(dlg, el => !el.open && getComputedStyle(el).visibility === 'hidden' && el._internals.role === 'dialog' && el._internals.ariaModal === 'true'));
+    check('modal: the trigger gets aria-haspopup', await page.$eval(trigger, b => b.getAttribute('aria-haspopup') === 'dialog'));
+    // Keyboard: Enter on the trigger.
+    await page.locator(trigger).focus();
+    const same = await page.$eval(trigger, b => { b.click(); return document.getElementById('hello').open; });
+    check('modal: a trigger click does not set open directly', same === false);
+    check('modal: open follows the door', await until(page, s => document.querySelector(s).open === true, dlg));
+    let ev = await events(page);
+    check('modal: one toggle event, after the door cleared', ev.filter(e => e.type === 'toggle' && e.tag === 'rs-modal').length === 1, ev);
+    check('modal: focus moved into the content', await page.$eval(dlg, el => el.contains(document.activeElement) && document.activeElement !== el));
+    check('modal: the page behind is inert', await page.$eval(trigger, b => !!b.closest('[inert]')));
+    const trapped = [];
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press(i % 3 === 2 ? 'Shift+Tab' : 'Tab');
+      trapped.push(await page.$eval(dlg, el => el === document.activeElement || el.contains(document.activeElement)));
+    }
+    check('modal: Tab and Shift+Tab stay inside', trapped.every(Boolean), trapped);
+    await page.keyboard.press('Escape');
+    check('modal: Escape presses the close button; close fires when the door is home', await until(page, () => window.__events.some(e => e.type === 'close')));
+    check('modal: the overlay goes once the latch is reset', await until(page, s => !document.querySelector(s).hasAttribute('data-deployed'), dlg));
+    check('modal: focus returns to the trigger and the page is live again', await page.$eval(trigger, b => document.activeElement === b && !b.closest('[inert]')));
+    // Mouse: the trigger, then a click on the backdrop.
+    await page.locator(trigger).click();
+    await until(page, s => document.querySelector(s).open === true, dlg);
+    await page.mouse.click(4, 4);
+    check('modal: a backdrop click closes it', await until(page, s => document.querySelector(s).open === false, dlg));
+    await until(page, s => !document.querySelector(s).hasAttribute('data-deployed'), dlg);
+    // An <rs-button> trigger opens it when its lamp lights; data-rs-close inside the content closes it.
+    await page.locator('rs-button[data-rs-open="hello"] >> .hit').click();
+    check('modal: an rs-button trigger opens it', await until(page, s => document.querySelector(s).open === true, dlg));
+    await page.locator(dlg + ' [data-rs-close]').click();
+    check('modal: data-rs-close closes it', await until(page, s => document.querySelector(s).open === false, dlg));
+    await until(page, s => !document.querySelector(s).hasAttribute('data-deployed'), dlg);
+    check('modal: the close control is named', await page.$eval(dlg, el => el.shadowRoot.querySelector('.hit').getAttribute('aria-label') === 'Close'));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+  {
+    const { page, errors } = await open(browser, { reducedMotion: 'reduce' });
+    const r = await page.$eval('#hello', el => { el.showModal(); const a = el.open; el.close(); return [a, el.open, el.hasAttribute('data-deployed')]; });
+    check('modal, reduced motion: showModal() and close() settle at once', r.join() === 'true,false,false', r);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });
