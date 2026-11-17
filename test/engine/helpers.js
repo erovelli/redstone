@@ -1,12 +1,12 @@
 // Shared helpers for the engine suites (this file is not a suite: it does not end in .test.js).
 const RS = require('../../src/engine.js');
 
-// A strict world with a stone floor at z = -1 over [x0..x1] x [y0..y1].
+// A strict world with a stone floor (or opts.floorType) at z = -1 over [x0..x1] x [y0..y1].
 function world(opts = {}) {
   const w = new RS.World(Object.assign({ strict: true }, opts));
   if (opts.floor !== false) {
     const [x0, x1, y0, y1] = opts.floor || [-3, 20, -3, 6];
-    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) w.put(x, y, -1, 'stone');
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) w.put(x, y, -1, opts.floorType || 'stone');
   }
   return w;
 }

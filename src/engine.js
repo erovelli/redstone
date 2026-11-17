@@ -1250,9 +1250,9 @@ class World {
       const column = this.columnAt(en.x, en.y, en.z + 0.125);
       en.stasis = !!en.projectile && column === 'up';
       if (en.stasis) { en.vx = en.vy = en.vz = 0; en.ground = false; continue; }
+      if (!en.projectile && !en.ground) en.vz -= 0.04;
       if (column === 'up') en.vz = Math.min(0.7, en.vz + 0.06);
-      else if (column === 'down') en.vz = Math.max(-0.3, en.vz - 0.03);
-      else if (!en.projectile && !en.ground) en.vz -= 0.04;
+      else if (column === 'down') en.vz = Math.max(-0.9, en.vz - 0.03);
       if (en.projectile && this.rules.projectileHit && this._projectileStep(en)) continue;
       let nz = en.z + en.vz;
       if (en.vz < 0 && this.solidAt(en.x, en.y, nz - 1e-3)) { nz = Math.floor(nz - 1e-3) + 1; en.vz = 0; }
@@ -1455,7 +1455,8 @@ class World {
   // ---- state signatures ------------------------------------------------------------------------------
 
   stateOf(b) {
-    const keys = Object.keys(b).filter(k => !TRANSIENT.has(k) && k[0] !== '_' && typeof b[k] !== 'function').sort();
+    // Unset, false, 0 and '' all mean the default, so a block that returns to its start state hashes the same.
+    const keys = Object.keys(b).filter(k => !TRANSIENT.has(k) && k[0] !== '_' && typeof b[k] !== 'function' && b[k] !== undefined && b[k] !== null && b[k] !== false && b[k] !== 0 && b[k] !== '').sort();
     return `${b.t}@${b.x},${b.y},${b.z}{` + keys.map(k => {
       const v = b[k];
       return k + '=' + (v && typeof v === 'object' ? JSON.stringify(v) : String(v));
