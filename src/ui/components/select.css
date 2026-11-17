@@ -1,0 +1,10 @@
+/* rs-select: before the element upgrades, the options are a plain list beside the space the closed machine takes
+   (the control row and the frame: about 4 blocks tall). */
+rs-select:not(:defined) {
+  display: inline-flex;
+  flex-direction: column;
+  vertical-align: top;
+  box-sizing: border-box;
+  min-height: calc(var(--rs-block, 24px) * 4.16);
+  padding-left: calc(var(--rs-block, 24px) * 9);
+}

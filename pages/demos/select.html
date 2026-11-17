@@ -1,0 +1,19 @@
+<section class="demo" data-tag="rs-select">
+  <p>A select with native semantics: one <code>value</code>, <code>input</code> and <code>change</code> when the choice changes, a <code>name</code> that submits it, and <code>required</code> against an empty placeholder option. The book on the lectern has a page per option (up to 15); the list opens over the page below. Keys: ArrowDown, Enter, Space or typing open it; arrows, Home, End and typing move through it; Enter chooses, Escape closes.</p>
+  <!-- example -->
+  <form class="demo-form" action="#">
+    <rs-select name="size" aria-label="Size">
+      <option value="s">Small</option>
+      <option value="m" selected>Medium</option>
+      <option value="l">Large</option>
+    </rs-select>
+    <rs-select name="ore" aria-label="Ore" required>
+      <option value="">Choose…</option>
+      <option>Iron</option><option>Gold</option><option>Copper</option>
+      <option>Redstone</option><option>Lapis</option><option>Emerald</option>
+      <option>Diamond</option><option>Quartz</option><option>Coal</option>
+    </rs-select>
+    <button type="submit">Send</button>
+  </form>
+  <!-- /example -->
+</section>

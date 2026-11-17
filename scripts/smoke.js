@@ -377,6 +377,60 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-select (lectern, copper bulb curtain, combobox keys, form)');
+  {
+    const { page, errors } = await open(browser);
+    const size = 'rs-select[name="size"]', ore = 'rs-select[name="ore"]';
+    const hit = s => s + ' >> .hit';
+    await page.locator(size).scrollIntoViewIfNeeded();
+    check('starts at the selected option; FormData has both', await page.$eval(size, el => el.value === 'm' && el.contraption.io.lectern.page === 1 &&
+      [...new FormData(el.form)].map(([k, v]) => k + '=' + v).join('&') === 'size=m&ore='));
+    check('required with the empty placeholder: valueMissing', await page.$eval(ore, el => el.validity.valueMissing && !el.form.checkValidity()));
+    check('combobox: name, aria-expanded=false, haspopup listbox, value text', await page.$eval(size, el => {
+      const b = el.shadowRoot.querySelector('.hit');
+      return b.getAttribute('role') === 'combobox' && b.getAttribute('aria-label') === 'Size' && b.getAttribute('aria-expanded') === 'false' &&
+        b.getAttribute('aria-haspopup') === 'listbox' && b.textContent === 'Medium' && el.shadowRoot.querySelector('.window').getAttribute('role') === 'listbox';
+    }));
+    check('the chosen text sits beside the machine', await page.$eval(size, el => el.shadowRoot.querySelector('.rs-chosen').textContent === 'Medium'));
+    const h0 = await page.$eval(size, el => el.getBoundingClientRect().height);
+    await page.locator(hit(size)).focus();
+    await page.keyboard.press('ArrowDown');
+    check('ArrowDown presses the button; the list is open once the curtain is clear', await until(page, s => document.querySelector(s).open === true, size) &&
+      await page.$eval(size, el => el.shadowRoot.querySelector('.hit').getAttribute('aria-expanded') === 'true' && !el.shadowRoot.querySelector('.window').hidden));
+    check('the open list lies over the page: the element keeps its height', Math.abs(await page.$eval(size, el => el.getBoundingClientRect().height) - h0) < 1);
+    check('the active option is the chosen one', await page.$eval(size, el => el.shadowRoot.querySelector('.hit').ariaActiveDescendantElement === el.children[1]));
+    await events(page);
+    await page.keyboard.press('ArrowDown');
+    check('ArrowDown moves the active option without a player action', await page.$eval(size, el => el.shadowRoot.querySelector('.hit').ariaActiveDescendantElement === el.children[2] && el.value === 'm'));
+    await page.keyboard.press('Enter');
+    check('Enter turns the page: value follows the comparator', await until(page, s => document.querySelector(s).value === 'l', size));
+    check('and the pulse closes the list', await until(page, s => document.querySelector(s).open === false && !document.querySelector(s).hasAttribute('data-deployed'), size));
+    let ev = await events(page);
+    check('one input and one change', ev.filter(e => e.name === 'size').map(e => e.type + e.value).join() === 'inputl,changel', ev);
+    check('aria-selected on the options', await page.$eval(size, el => [...el.children].map(o => o.getAttribute('aria-selected')).join() === 'false,false,true'));
+    await page.keyboard.press('s');
+    check('typing opens the list on the matching option', await until(page, s => document.querySelector(s).open === true, size) &&
+      await page.$eval(size, el => el.shadowRoot.querySelector('.hit').ariaActiveDescendantElement === el.children[0]));
+    await page.keyboard.press('Escape');
+    check('Escape closes it unchosen', await until(page, s => document.querySelector(s).open === false, size) && await page.$eval(size, el => el.value === 'l'));
+    // Mouse: the combobox, then an option in the list.
+    await page.locator(hit(ore)).click();
+    check('a click opens the list', await until(page, s => document.querySelector(s).open === true, ore));
+    await page.locator(ore + ' option:nth-of-type(4)').click();
+    check('clicking an option chooses it', await until(page, s => document.querySelector(s).value === 'Copper' && !document.querySelector(s).open, ore));
+    check('valid once chosen; FormData has it', await page.$eval(ore, el => el.checkValidity() && new FormData(el.form).get('ore') === 'Copper'));
+    check('state is announced', await page.$eval(ore, el => /Copper selected/.test(el.shadowRoot.querySelector('[aria-live]').textContent)));
+    check('el.value = "Gold" settles at once, closed', await page.$eval(ore, el => { el.value = 'Gold'; return el.value === 'Gold' && !el.open && !el.contraption.io.bulb.lit; }));
+    await page.$eval(ore, el => el.form.reset());
+    check('form reset returns to the starting choice', await until(page, s => { const [a, b] = document.querySelectorAll(s); return a.value === 'm' && b.value === ''; }, 'rs-select'));
+    await page.$eval(size, el => el.setAttribute('disabled', ''));
+    await page.$eval(size, el => el.shadowRoot.querySelector('.hit').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
+    await page.waitForTimeout(500);
+    check('disabled: no presses', await page.$eval(size, el => !el.open && !el.contraption.io.button.on && !el.contraption.io.bulb.lit));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nrs-theme (docs header, gallery, storage, workbench)');
   {
     const { page, errors } = await open(browser, { colorScheme: 'dark' });
