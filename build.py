@@ -4,7 +4,7 @@ here = os.path.dirname(os.path.abspath(__file__))
 src = lambda *p: open(os.path.join(here, *p)).read()
 parts = {'ENGINE':'src/engine.js','DOOR':'src/contraptions/door.js','SCENES':'src/contraptions/scenes.js','PLAQUE':'src/contraptions/plaque.js',
          'HIDDEN':'src/contraptions/hidden.js','LAUNCHER':'src/contraptions/launcher.js','PISTONDOOR':'src/contraptions/pistondoor.js','LOGIC':'src/contraptions/logic.js',
-         'CATALOGUE':'src/catalogue.js','RENDER':'src/render.js','CATAPP':'pages/catalogue-app.js'}
+         'CATALOGUE':'src/catalogue.js','TEXTURES':'src/textures.js','RENDER':'src/render.js','CATAPP':'pages/catalogue-app.js'}
 os.makedirs(os.path.join(here,'dist'), exist_ok=True)
 for name, tpl in [('catalogue.html','pages/catalogue.html')]:
     t = src(tpl)
