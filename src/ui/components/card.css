@@ -1,0 +1,11 @@
+/* rs-card: before the element upgrades, its content shows in a plain bordered box as thick as the frame. */
+rs-card:not(:defined) {
+  display: block;
+  box-sizing: border-box;
+  padding: .6em .8em;
+  border: var(--rs-block, 24px) solid rgba(128, 128, 128, .35);
+}
+rs-card:not(:defined) > [slot="header"] {
+  display: block;
+  font-weight: 600;
+}

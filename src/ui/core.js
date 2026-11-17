@@ -656,7 +656,8 @@ class RedstoneElement extends HTMLElement {
   _resized() {
     if (!this._ctl || !this._view) return;
     if (this._fitBlock() !== this._view.B) this._mountView();
-    else this._scheduleRebuild(true);
+    // Computed params may depend on the block size (columns that fill a width), so check them either way.
+    this._scheduleRebuild(true);
   }
 
   /* ----- overlays: controls, sign text, openings ----- */
