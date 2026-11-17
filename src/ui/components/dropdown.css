@@ -1,0 +1,3 @@
+/* rs-dropdown: before the element upgrades, the items are an ordinary column of buttons under the label. */
+rs-dropdown:not(:defined) { display: inline-flex; flex-direction: column; align-items: flex-start; gap: .2em; }
+rs-dropdown:not(:defined)::before { content: attr(label); font-weight: 600; }

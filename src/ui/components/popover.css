@@ -1,0 +1,2 @@
+/* rs-popover: before the element upgrades it is hidden, like a closed popover. */
+rs-popover:not(:defined) { display: none; }

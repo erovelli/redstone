@@ -341,6 +341,151 @@ async function main() {
     await wb.close();
   }
 
+  console.log('\nrs-modal: trigger, focus trap and return, Escape, backdrop, data-rs-close, reduced motion');
+  {
+    const { page, errors } = await open(browser);
+    const dlg = '#hello', trigger = 'button[data-rs-open="hello"]';
+    await page.evaluate(() => document.getElementById('hello').addEventListener('close', () => window.__events.push({ type: 'close', tag: 'rs-modal' })));
+    await page.locator(trigger).scrollIntoViewIfNeeded();
+    check('modal: starts closed, hidden, role dialog and aria-modal', await page.$eval(dlg, el => !el.open && getComputedStyle(el).visibility === 'hidden' && el._internals.role === 'dialog' && el._internals.ariaModal === 'true'));
+    check('modal: the trigger gets aria-haspopup', await page.$eval(trigger, b => b.getAttribute('aria-haspopup') === 'dialog'));
+    // Keyboard: Enter on the trigger.
+    await page.locator(trigger).focus();
+    const same = await page.$eval(trigger, b => { b.click(); return document.getElementById('hello').open; });
+    check('modal: a trigger click does not set open directly', same === false);
+    check('modal: open follows the door', await until(page, s => document.querySelector(s).open === true, dlg));
+    let ev = await events(page);
+    check('modal: one toggle event, after the door cleared', ev.filter(e => e.type === 'toggle' && e.tag === 'rs-modal').length === 1, ev);
+    check('modal: focus moved into the content', await page.$eval(dlg, el => el.contains(document.activeElement) && document.activeElement !== el));
+    check('modal: the page behind is inert', await page.$eval(trigger, b => !!b.closest('[inert]')));
+    const trapped = [];
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press(i % 3 === 2 ? 'Shift+Tab' : 'Tab');
+      trapped.push(await page.$eval(dlg, el => el === document.activeElement || el.contains(document.activeElement)));
+    }
+    check('modal: Tab and Shift+Tab stay inside', trapped.every(Boolean), trapped);
+    await page.keyboard.press('Escape');
+    check('modal: Escape presses the close button; close fires when the door is home', await until(page, () => window.__events.some(e => e.type === 'close')));
+    check('modal: the overlay goes once the latch is reset', await until(page, s => !document.querySelector(s).hasAttribute('data-deployed'), dlg));
+    check('modal: focus returns to the trigger and the page is live again', await page.$eval(trigger, b => document.activeElement === b && !b.closest('[inert]')));
+    // Mouse: the trigger, then a click on the backdrop.
+    await page.locator(trigger).click();
+    await until(page, s => document.querySelector(s).open === true, dlg);
+    await page.mouse.click(4, 4);
+    check('modal: a backdrop click closes it', await until(page, s => document.querySelector(s).open === false, dlg));
+    await until(page, s => !document.querySelector(s).hasAttribute('data-deployed'), dlg);
+    // An <rs-button> trigger opens it when its lamp lights; data-rs-close inside the content closes it.
+    await page.locator('rs-button[data-rs-open="hello"] >> .hit').click();
+    check('modal: an rs-button trigger opens it', await until(page, s => document.querySelector(s).open === true, dlg));
+    await page.locator(dlg + ' [data-rs-close]').click();
+    check('modal: data-rs-close closes it', await until(page, s => document.querySelector(s).open === false, dlg));
+    await until(page, s => !document.querySelector(s).hasAttribute('data-deployed'), dlg);
+    check('modal: the close control is named', await page.$eval(dlg, el => el.shadowRoot.querySelector('.hit').getAttribute('aria-label') === 'Close'));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+  {
+    const { page, errors } = await open(browser, { reducedMotion: 'reduce' });
+    const r = await page.$eval('#hello', el => { el.showModal(); const a = el.open; el.close(); return [a, el.open, el.hasAttribute('data-deployed')]; });
+    check('modal, reduced motion: showModal() and close() settle at once', r.join() === 'true,false,false', r);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
+  console.log('\nrs-tooltip and rs-popover');
+  {
+    const { page, errors } = await open(browser);
+    const tip = 'rs-tooltip[for="tip-save"]', save = '#tip-save';
+    await page.locator(save).scrollIntoViewIfNeeded();
+    check('tooltip: role tooltip, the target is described by it', await page.$eval(tip, el => el._internals.role === 'tooltip' && document.getElementById('tip-save').getAttribute('aria-describedby') === el.id));
+    await page.locator(save).hover();
+    check('tooltip: pointing at the target uncovers the signs', await until(page, s => document.querySelector(s).open === true, tip));
+    check('tooltip: the tip sits next to its target, on screen', await page.$eval(tip, el => {
+      const b = el.shadowRoot.querySelector('.box').getBoundingClientRect(), t = document.getElementById('tip-save').getBoundingClientRect();
+      return (b.bottom <= t.top + 1 || b.top >= t.bottom - 1) && b.left >= 0 && b.right <= innerWidth && getComputedStyle(el.shadowRoot.querySelector('.label')).visibility === 'visible';
+    }));
+    let ev = await events(page);
+    check('tooltip: toggle fired once', ev.filter(e => e.type === 'toggle' && e.tag === 'rs-tooltip').length === 1, ev);
+    await page.mouse.move(2, 600);
+    check('tooltip: leaving covers it again after the plate releases', await until(page, s => document.querySelector(s).open === false && !document.querySelector(s).hasAttribute('data-deployed'), tip));
+    await page.locator(save).focus();
+    check('tooltip: focus shows it', await until(page, s => document.querySelector(s).open === true, tip));
+    await page.keyboard.press('Escape');
+    check('tooltip: Escape dismisses it while focus stays', await until(page, s => document.querySelector(s).open === false, tip) && await page.evaluate(() => document.activeElement.id === 'tip-save'));
+    const wrap = 'rs-tooltip[tip]';
+    await page.locator(wrap + ' button').hover();
+    check('tooltip: wrapping its target works, with aria-description', await until(page, s => document.querySelector(s).open === true, wrap) && await page.$eval(wrap + ' button', b => b.getAttribute('aria-description') === 'Ctrl+Z'));
+    await page.mouse.move(2, 600);
+
+    const pop = 'rs-popover', ptrig = '#rs-popover .live > button';
+    await page.locator(ptrig).scrollIntoViewIfNeeded();
+    await events(page);
+    check('popover: trigger has aria-expanded false and aria-controls', await page.$eval(ptrig, b => b.getAttribute('aria-expanded') === 'false' && b.getAttribute('aria-controls') === document.querySelector('rs-popover').id));
+    await page.locator(ptrig).click();
+    check('popover: a click opens it (open follows the door)', await until(page, s => document.querySelector(s).open === true, pop));
+    check('popover: aria-expanded follows', await page.$eval(ptrig, b => b.getAttribute('aria-expanded') === 'true'));
+    await page.locator(ptrig).click();
+    check('popover: clicking the trigger again closes it', await until(page, s => document.querySelector(s).open === false, pop));
+    await until(page, s => !document.querySelector(s).hasAttribute('data-deployed'), pop);
+    await page.locator(ptrig).focus();
+    await page.keyboard.press('Enter');
+    check('popover: keyboard opens it', await until(page, s => document.querySelector(s).open === true, pop));
+    await page.keyboard.press('Tab');
+    check('popover: Tab from the trigger reaches the close control', await page.evaluate(() => document.activeElement.localName === 'rs-popover'));
+    await page.keyboard.press('Escape');
+    check('popover: Escape closes it and focus returns to the trigger', await until(page, s => document.querySelector(s).open === false, pop) && await page.evaluate(s => document.activeElement === document.querySelector(s), ptrig));
+    await until(page, s => !document.querySelector(s).hasAttribute('data-deployed'), pop);
+    await page.locator(ptrig).click();
+    await until(page, s => document.querySelector(s).open === true, pop);
+    await page.mouse.click(1200, 20);
+    check('popover: a click outside closes it', await until(page, s => document.querySelector(s).open === false, pop));
+    ev = await events(page);
+    check('popover: toggle events come from the door', ev.filter(e => e.type === 'toggle' && e.tag === 'rs-popover').length === 6, ev);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
+  console.log('\nrs-dropdown');
+  {
+    const { page, errors } = await open(browser);
+    const dd = 'rs-dropdown';
+    await page.evaluate(() => document.querySelector('rs-dropdown').addEventListener('select', ev => window.__events.push({ type: 'select', value: ev.detail.value })));
+    await page.locator(dd).scrollIntoViewIfNeeded();
+    check('dropdown: menu button with aria-haspopup and aria-expanded false; items are menuitems in a menu', await page.$eval(dd, el => {
+      const hit = el.shadowRoot.querySelector('.hit');
+      return hit.getAttribute('aria-haspopup') === 'menu' && hit.getAttribute('aria-expanded') === 'false' &&
+        el.shadowRoot.querySelector('.window').getAttribute('role') === 'menu' && [...el.children].every(n => n.getAttribute('role') === 'menuitem');
+    }));
+    await page.locator(dd + ' >> .hit').click();
+    check('dropdown: a click opens it when the door is clear; focus on the first item', await until(page, s => document.querySelector(s).open === true, dd) &&
+      await page.evaluate(() => document.activeElement.textContent === 'Copy'));
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowDown');
+    check('dropdown: arrow keys wrap round the items', await page.evaluate(() => document.activeElement.textContent === 'Copy'));
+    await page.keyboard.press('d');
+    check('dropdown: typeahead', await page.evaluate(() => document.activeElement.textContent === 'Delete'));
+    await page.waitForTimeout(1100);   // the button is in for 10 ticks after the press
+    await page.keyboard.press('Enter');
+    check('dropdown: choosing an item presses the button; select fires with it once the door has shut', await until(page, () => window.__events.some(e => e.type === 'select')) &&
+      await page.$eval(dd, el => el.open === false) && (await events(page)).find(e => e.type === 'select').value === 'delete');
+    check('dropdown: focus returns to the menu button', await page.evaluate(() => document.activeElement.localName === 'rs-dropdown'));
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('ArrowDown');
+    check('dropdown: ArrowDown on the button opens it', await until(page, s => document.querySelector(s).open === true, dd));
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('Escape');
+    check('dropdown: Escape shuts it, no select', await until(page, s => document.querySelector(s).open === false, dd) && !(await events(page)).some(e => e.type === 'select'));
+    await page.waitForTimeout(1100);
+    await page.locator(dd + ' >> .hit').click();
+    await until(page, s => document.querySelector(s).open === true, dd);
+    await page.waitForTimeout(1100);
+    await page.mouse.click(1200, 20);
+    check('dropdown: a click outside shuts it', await until(page, s => document.querySelector(s).open === false && !document.querySelector(s).hasAttribute('data-deployed'), dd));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });

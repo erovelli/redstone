@@ -1,0 +1,13 @@
+<section class="demo" data-tag="rs-modal">
+  <p>Use it where you would use <code>&lt;dialog&gt;</code> with <code>showModal()</code>. Any element with <code>data-rs-open="id"</code> opens it; <code>data-rs-close</code> inside it closes it, and so do the close button in the frame, Escape and a click on the backdrop. While it is up, the page behind is inert and focus stays inside; afterwards focus returns to the trigger.</p>
+  <!-- example -->
+  <button type="button" data-rs-open="hello">Open the dialog</button>
+  <rs-button data-rs-open="hello" type="button">Open</rs-button>
+  <rs-modal id="hello">
+    <span slot="title">Hello</span>
+    <p>This dialog sits behind a honey and slime door. <a href="#rs-modal">A link</a>.</p>
+    <label>Name <input name="name" size="12"></label>
+    <button type="button" data-rs-close>Done</button>
+  </rs-modal>
+  <!-- /example -->
+</section>

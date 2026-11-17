@@ -1,0 +1,3 @@
+/* rs-tooltip: before the element upgrades, a tooltip named by `for` is hidden; a wrapping tooltip shows its target
+   as usual. */
+rs-tooltip[for]:not(:defined) { display: none; }
