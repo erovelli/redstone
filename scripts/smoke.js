@@ -486,6 +486,59 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-tabs');
+  {
+    const { page, errors } = await open(browser);
+    const tabs = 'rs-tabs';
+    await page.evaluate(() => document.querySelector('rs-tabs').addEventListener('change', ev => window.__events.push({ type: 'tabs-change', value: ev.detail.value })));
+    await page.locator(tabs).scrollIntoViewIfNeeded();
+    const hits = tabs + ' >> .hit';
+    check('tabs: starts on the panel marked selected; three tabs in a tablist, aria-selected on it', await page.$eval(tabs, el => {
+      const b = [...el.shadowRoot.querySelectorAll('.hit')].filter(h => !h.hidden);
+      return el.value === 'Reviews' && el.selected === 1 && b.length === 3 && b.every(h => h.getAttribute('role') === 'tab') &&
+        b[1].getAttribute('aria-selected') === 'true' && b[0].getAttribute('aria-selected') === 'false' &&
+        el.shadowRoot.querySelector('.controls').getAttribute('role') === 'tablist' && b[2].getAttribute('aria-label') === 'Ship';
+    }));
+    check('tabs: only the selected panel is rendered, as a named tabpanel', await page.$eval(tabs, el => {
+      const p = [...el.children];
+      return p[1].getBoundingClientRect().height > 0 && p[0].getBoundingClientRect().height === 0 && p[1].getAttribute('role') === 'tabpanel' && p[1].getAttribute('aria-label') === 'Reviews';
+    }));
+    const same = await page.$eval(tabs, el => { el.shadowRoot.querySelectorAll('.hit')[2].click(); return el.value; });
+    check('tabs: a click does not change value directly', same === 'Reviews');
+    check('tabs: the shutter closes before the panel changes', await until(page, s => !document.querySelector(s).contraption.state.shown1 && document.querySelector(s).value === 'Reviews', tabs));
+    check('tabs: value follows the shutter clearing on the new panel', await until(page, s => document.querySelector(s).value === 'Ship', tabs));
+    let ev = await events(page);
+    check('tabs: one change event, with the new value', ev.filter(e => e.type === 'tabs-change').length === 1 && ev.find(e => e.type === 'tabs-change').value === 'Ship', ev);
+    // Keyboard: arrows, Home and End move focus and choose as they go.
+    await page.waitForTimeout(1100);
+    await page.locator(hits).nth(2).focus();
+    await page.keyboard.press('ArrowUp');
+    check('tabs: ArrowUp chooses the previous tab', await until(page, s => document.querySelector(s).value === 'Reviews', tabs));
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('Home');
+    check('tabs: Home chooses the first tab and focus follows', await until(page, s => document.querySelector(s).value === 'Specs', tabs) &&
+      await page.$eval(tabs, el => el.shadowRoot.activeElement === el.shadowRoot.querySelectorAll('.hit')[0]));
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('End');
+    check('tabs: End chooses the last tab', await until(page, s => document.querySelector(s).value === 'Ship', tabs));
+    check('tabs: roving tab stop on the selected tab', await page.$eval(tabs, el => [...el.shadowRoot.querySelectorAll('.hit')].map(b => b.tabIndex).slice(0, 3).join() === '-1,-1,0'));
+    check('tabs: el.value = "Specs" settles at once', await page.$eval(tabs, el => { el.value = 'Specs'; return el.value === 'Specs' && el.selected === 0 && el.contraption.state.shown0; }));
+    await page.$eval(tabs, el => el.setAttribute('disabled', ''));
+    await page.$eval(tabs, el => el.shadowRoot.querySelectorAll('.hit')[1].click());
+    await page.waitForTimeout(900);
+    check('tabs: disabled: no presses', await page.$eval(tabs, el => el.value === 'Specs' && !el.contraption.io.buttons.some(b => b.on)));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+  {
+    const { page, errors } = await open(browser, { reducedMotion: 'reduce' });
+    await page.locator('rs-tabs').scrollIntoViewIfNeeded();
+    const r = await page.$eval('rs-tabs', el => { el.shadowRoot.querySelectorAll('.hit')[0].click(); return el.value; });
+    check('tabs, reduced motion: a click settles at once', r === 'Specs', r);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });
