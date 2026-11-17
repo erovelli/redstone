@@ -220,6 +220,19 @@ const tests = [
     legacy.run(10);
     return ok(!p.gone && p.ground, 'in a legacy world a pearl rests on blocks');
   }),
+
+  T('a strict world refuses a piston move that uncovers a water source', () => {
+    const w = world({ floorType: 'obsidian' });
+    w.put(0, 0, 0, 'piston', { d: 'E', s: true, ext: true });
+    w.put(1, 0, 0, 'head', { d: 'E', s: true });
+    w.put(2, 0, 0, 'stone');                 // the east wall of the basin, held by the sticky piston
+    w.put(3, -1, 0, 'stone'); w.put(3, 1, 0, 'stone'); w.put(4, 0, 0, 'stone');
+    w.put(3, 0, 0, 'water');
+    const lever = w.put(0, 1, 0, 'lever', { att: 'D', on: true });
+    w.seal();
+    w.hand.flip(lever);
+    return throws(() => w.run(2), /not contained/, 'retracting opens the basin');
+  }),
 ];
 
 module.exports = { suite: 'engine: devices and entities', tests };

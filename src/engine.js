@@ -1167,6 +1167,10 @@ class World {
     for (const b of r.move) { touched.add(K(b.x, b.y, b.z)); touched.add(K(b.x + mvv[0], b.y + mvv[1], b.z + mvv[2])); }
     if (r.move.length) this.shift(r.move, md);
     this._popDetached(touched, r.move);
+    if (this.strict) for (const k of touched) {
+      const z = (k % 1024) - 512, y = (Math.floor(k / 1024) % 1024) - 512, x = Math.floor(k / 1048576) - 512;
+      if (!this.get(x, y, z)) this._waterRemoved(x, y, z);
+    }
     if (r.move.length || r.destroy.length) {
       this._emit('move', { name: piston && piston.ext ? 'extend' : 'retract', x: piston ? piston.x : 0, y: piston ? piston.y : 0, z: piston ? piston.z : 0, piston, dir: md, blocks: r.move.slice(), popped: r.destroy.slice() });
     }
@@ -1514,6 +1518,9 @@ class World {
       if (origin) return `${fmt(origin[0] + x)} ${fmt(origin[1] + z)} ${fmt(origin[2] + y)}`;
       return `~${fmt(x)} ~${fmt(z)} ~${fmt(y)}`;
     };
+    // Dust shapes and levels are derived: compute them so the exported wire states are right.
+    this._inside++;
+    try { this.computePower(); } finally { this._inside--; }
     const list = [...this.c.values()];
     const out = [];
     if (!list.length) return out;
