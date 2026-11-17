@@ -146,10 +146,9 @@ footer{ margin-top:60px; padding-top:16px; border-top:1px solid var(--line); fon
       <button class="menu" id="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
       <a class="wide" href="#getting-started">Start</a>
       <a href="catalogue.html">Workbench</a>
-      <rs-toggle class="lights" id="lights">Lights</rs-toggle>
+      <rs-theme class="lights" id="lights">Lights</rs-theme>
     </nav>
   </header>
-  <script>document.getElementById('lights').toggleAttribute('checked', document.documentElement.dataset.theme !== 'dark');</script>
 
   <div class="layout">
     <aside id="side" aria-label="Documentation"></aside>
@@ -237,13 +236,7 @@ footer{ margin-top:60px; padding-top:16px; border-top:1px solid var(--line); fon
   var ORDER = ['Navigation', 'Disclosure and overlays', 'Form controls', 'Feedback', 'Display'];
   var slug = function (s) { return s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); };
 
-  /* the theme switch is an rs-toggle: the page follows its lamp, not the click */
-  var lights = $('#lights');
-  lights.addEventListener('change', function () {
-    var t = lights.checked ? 'light' : 'dark';
-    document.documentElement.dataset.theme = t;
-    try { localStorage.setItem('rs-theme', t); } catch (e) {}
-  });
+  /* the theme switch is an rs-theme: it sets data-theme on <html> from its lamp and stores the choice */
 
   /* the opening test element (core section): not a public component */
   var RS = R.engine;

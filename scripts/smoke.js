@@ -302,6 +302,36 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-theme (docs header, gallery, storage, workbench)');
+  {
+    const { page, errors } = await open(browser, { colorScheme: 'dark' });
+    check('starts from prefers-color-scheme: dark', await page.evaluate(() => document.documentElement.dataset.theme === 'dark' && document.querySelector('#lights').theme === 'dark'));
+    const g = '#rs-theme rs-theme';
+    await page.locator(g).scrollIntoViewIfNeeded();
+    await page.locator(g + ' >> .hit').click();
+    check('the gallery switch lights its lamp and the page turns light', await until(page, () => document.documentElement.dataset.theme === 'light'));
+    check('stored, and the header switch follows through its own lever', await page.evaluate(() => localStorage.getItem('rs-theme') === 'light' && document.querySelector('#lights').contraption.io.lever.on === true));
+    await page.reload();
+    check('a reload starts from the stored choice', await page.evaluate(() => document.documentElement.dataset.theme === 'light' && document.querySelector('#lights').theme === 'light'));
+    // Auto: a daylight detector; the sky follows the system colour scheme as it changes.
+    await page.evaluate(() => { const t = document.createElement('rs-theme'); t.setAttribute('auto', ''); t.id = 'auto-theme'; t.textContent = 'Daylight'; document.body.appendChild(t); });
+    check('auto: starts from the system scheme (dark) and has no control', await page.evaluate(() => { const t = document.querySelector('#auto-theme'); return t.theme === 'dark' && t.contraption.io.detector && t.shadowRoot.querySelector('.hit').hidden; }));
+    await page.emulateMedia({ colorScheme: 'light' });
+    check('auto: follows the system scheme as it changes', await until(page, () => document.querySelector('#auto-theme').theme === 'light' && document.documentElement.dataset.theme === 'light'));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+    const wb = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const wbErrors = [];
+    wb.on('pageerror', e => wbErrors.push(String(e)));
+    wb.on('console', m => { if (m.type() === 'error') wbErrors.push(m.text()); });
+    await wb.goto(URL.replace('index.html', 'catalogue.html'));
+    const t0 = await wb.evaluate(() => document.documentElement.dataset.theme);
+    await wb.locator('#theme >> .hit').click();
+    check('workbench: its rs-theme switches the page', await until(wb, t => document.documentElement.dataset.theme !== t, t0));
+    check('workbench: no console errors', wbErrors.length === 0, wbErrors);
+    await wb.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });
