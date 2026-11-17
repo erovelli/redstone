@@ -16,144 +16,20 @@ const IN_NODE = typeof module !== 'undefined' && module.exports;
 const HAS_DOM = typeof window !== 'undefined' && typeof document !== 'undefined' && typeof HTMLElement !== 'undefined';
 const RSR = () => (typeof window !== 'undefined' ? window.RSR : null);
 
-/* =====================================================================================================
- * COMPATIBILITY SECTION
- * Fallbacks for engine and renderer APIs from docs/SPEC.md 5.1 and 5.3 that may not exist yet.
- * Everything here goes away once the new engine (world.hand, settle, quiet, hash, on, RS.blocks) and the
- * new renderer (view.rectOf, view.setInspect, per-view clocks) are merged. Nothing outside this section
- * checks for a missing API.
- * ===================================================================================================== */
-const compat = (() => {
-  const hands = new WeakMap();
-  const listeners = new WeakMap();
-  const lastSig = new WeakMap();
-
-  // Legacy worlds have no event bus: keep listeners here and let the hand shim emit sounds.
-  function emit(world, type, ev) {
-    const map = listeners.get(world);
-    const list = map && map[type];
-    if (list) for (const fn of list) fn(ev);
-  }
-  function on(world, type, fn) {
-    if (typeof world.on === 'function') return world.on(type, fn);
-    let map = listeners.get(world);
-    if (!map) listeners.set(world, (map = {}));
-    (map[type] = map[type] || []).push(fn);
-  }
-
-  // world.hand: player actions. The shim covers what the reference components use.
-  function hand(world) {
-    if (world.hand) return world.hand;
-    let h = hands.get(world);
-    if (h) return h;
-    const shake = (b, what) => {
-      if (typeof world.vibrate === 'function') world.vibrate(b.x, b.y, b.z, what);
-      emit(world, 'sound', { name: 'click', x: b.x, y: b.y, z: b.z });
-    };
-    h = {
-      flip(b) {
-        b.on = !b.on;
-        shake(b, 'lever');
-        return true;
-      },
-      press(b) {
-        if (b.on) return false;
-        b.on = true;
-        shake(b, 'button');
-        world.at(world.t + (b.wood ? 15 : 10), () => { b.on = false; });
-        return true;
-      },
-      step(b, standing) {
-        b.on = !!standing;
-        return true;
-      },
-    };
-    hands.set(world, h);
-    return h;
-  }
-
-  function signature(world) {
-    let s = '';
-    for (const b of world.c.values()) {
-      s += `${b.t}${b.x},${b.y},${b.z}:${b.d || ''}${b.on ? 1 : 0}${b.lit ? 1 : 0}${b.ext ? 1 : 0}${b.open ? 1 : 0}${b.lvl || 0}/${b.out || 0};`;
-    }
-    for (const e of world.entities || []) if (!e.gone) s += `e${e.x},${e.y},${e.z};`;
-    return s;
-  }
-
-  // world.quiet: nothing changed last tick and nothing is scheduled. Call once per tick.
-  function quiet(world) {
-    if ('quiet' in world) return !!world.quiet;
-    const sig = signature(world);
-    const same = lastSig.get(world) === sig;
-    lastSig.set(world, sig);
-    return same && world.ev.length === 0 && !(world.vibs && world.vibs.length);
-  }
-
-  // world.settle(max): run until quiet. Throws if the world never settles.
-  function settle(world, max = 400) {
-    if (typeof world.settle === 'function') return world.settle(max);
-    for (let i = 1; i <= max; i++) {
-      world.tick();
-      if (quiet(world)) return i;
-    }
-    throw new Error(`world did not settle within ${max} ticks`);
-  }
-
-  // world.hash(): deterministic state signature.
-  function hash(world) {
-    if (typeof world.hash === 'function') return world.hash();
-    const rows = [];
-    for (const b of world.c.values()) {
-      rows.push([b.t, b.x, b.y, b.z, b.d || '', b.att || '', b.on ? 1 : 0, b.lit ? 1 : 0, b.ext ? 1 : 0, b.open ? 1 : 0, b.s ? 1 : 0, b.lvl || 0, b.out || 0, b.delay || 0, b.mode || ''].join('|'));
-    }
-    return rows.sort().join(';');
-  }
-
-  // RS.blocks: the block registry. Until it exists, the SPEC 5.2 palette is the list of real blocks.
-  const PALETTE = new Set(('stone bricks planks smooth_stone iron quartz wool concrete glass terracotta obsidian slime honey rblock lamp bulb ' +
-    'target noteblock jukebox barrel furnace chest dispenser dropper hopper lectern bookshelf bell sign piston head observer dust torch ' +
-    'repeater comparator lever button plate door trapdoor gate daylight sculk soulsand magma water').split(' '));
-  function isRealBlock(RS, type) {
-    if (RS && RS.blocks) return !!RS.blocks[type] && !RS.blocks[type].fake;
-    return PALETTE.has(type);
-  }
-
-  // view.rectOf(block | [x,y,z], face) -> { x, y, w, h } in CSS px inside the stage.
-  function rectOf(view, at, face = 'front') {
-    if (typeof view.rectOf === 'function') return view.rectOf(at, face);
-    const [x, y, z] = Array.isArray(at) ? at : [at.x, at.y, at.z];
-    const B = view.B, T = view.T;
-    const f = view.front(x, y, z);
-    if (face === 'top') return { x: f.x, y: f.y - T, w: B, h: T };
-    // Assumption for the new renderer: rectOf(sign, 'front') is the sign board. A wall sign is a board
-    // 8/16 tall, 2/16 thick, against the block it hangs on (so 14/16 of a block back in its own cell).
-    if (!Array.isArray(at) && at.t === 'sign') return { x: f.x, y: f.y - T * 14 / 16 + B * 3.5 / 16, w: B, h: B * 8 / 16 };
-    return { x: f.x, y: f.y, w: B, h: B };
-  }
-
-  // Inspect (x-ray) mode: ghost the covering blocks so the wiring shows.
-  const COVER = new Set(['stone', 'bricks', 'planks', 'smooth_stone', 'iron', 'quartz', 'wool', 'concrete', 'obsidian', 'noteblock', 'jukebox', 'barrel', 'wall', 'wallb', 'ground']);
-  function setInspect(view, on) {
-    if (typeof view.setInspect === 'function') return view.setInspect(on);
-    view.ghost = on ? (b => COVER.has(b.t)) : null;
-  }
-
-  // The legacy renderer interpolates against one global tick clock.
-  function markTick() {
-    const R = RSR();
-    if (R && typeof R.markTick === 'function') R.markTick();
-  }
-
-  // The legacy renderer keeps a global list of views.
-  function removeView(view) {
-    const R = RSR();
-    if (R && typeof R.removeView === 'function') R.removeView(view);
-  }
-
-  return { hand, settle, quiet, hash, on, emit, isRealBlock, rectOf, setInspect, markTick, removeView };
-})();
-/* ============================== END OF COMPATIBILITY SECTION ============================== */
+/* ---------- engine and renderer access ----------
+ * Thin names for the engine (docs/SPEC.md 5.1) and renderer (5.3) calls the core uses, kept in one place. */
+const compat = {
+  hand: world => world.hand,
+  settle: (world, max = 400) => world.settle(max),
+  quiet: world => !!world.quiet,
+  hash: world => world.hash(),
+  on: (world, type, fn) => world.on(type, fn),
+  isRealBlock: (RS, type) => !!RS.blocks[type] && !RS.blocks[type].fake,
+  rectOf: (view, at, face = 'front') => view.rectOf(at, face),
+  setInspect: (view, on) => view.setInspect(on),
+  markTick: () => { const R = RSR(); if (R) R.markTick(); },
+  removeView: view => { const R = RSR(); if (R) R.removeView(view); },
+};
 
 
 /* ---------- attribute -> param mapping (pure) ---------- */
@@ -467,6 +343,9 @@ const BASE_CSS = `
   white-space: nowrap; text-overflow: ellipsis; pointer-events: none; color: var(--rs-sign-ink, #1b120a);
   font: 500 calc(var(--b) * .4)/1 var(--rs-sign-font, ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace); letter-spacing: 0; }
 .label[hidden], .window[hidden] { display: none; }
+:host([data-rs-beside]) { display: inline-flex; align-items: center; gap: calc(var(--rs-block, 24px) * .4); }
+.caption { line-height: normal; cursor: pointer; user-select: none; }
+:host([disabled]) .caption { cursor: not-allowed; opacity: .6; }
 .window { position: absolute; z-index: 3; overflow: auto; line-height: normal; background: var(--rs-window-bg, Canvas); color: var(--rs-window-ink, CanvasText); }
 .hit { position: absolute; z-index: 4; margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 0; font: inherit; color: inherit; }
 .hit:disabled { cursor: not-allowed; }
@@ -592,7 +471,9 @@ class RedstoneElement extends HTMLElement {
   _render() {
     const spec = this._def.spec;
     const root = this.attachShadow({ mode: 'open', delegatesFocus: true });
-    const labelSlot = spec.label ? '<slot></slot>' : '';
+    // label: an io key puts the text on those signs; 'beside' sets it next to the machine as ordinary page text.
+    const beside = spec.label === 'beside';
+    const labelSlot = spec.label && !beside ? '<slot></slot>' : '';
     const openings = asList(spec.opening);
     const defaultInWindow = openings.some(o => !o.slot);
     root.innerHTML = `<style>${BASE_CSS}${spec.styles || ''}</style>
@@ -602,11 +483,21 @@ class RedstoneElement extends HTMLElement {
         ${openings.map((o, i) => `<div class="window" part="window" data-i="${i}" hidden><slot${o.slot ? ` name="${o.slot}"` : ''}></slot></div>`).join('')}
         <div class="controls"></div>
       </div>
+      ${beside ? '<span class="caption" part="label"><slot></slot></span>' : ''}
       ${!spec.label && !defaultInWindow ? '<div class="stash"><slot></slot></div>' : ''}
       <span class="sr" aria-live="polite"></span>`;
     this._box = root.querySelector('.box');
     this._stage = root.querySelector('.stage');
     this._labelEl = root.querySelector('.label');
+    if (beside) {
+      this.setAttribute('data-rs-beside', '');
+      // Like a native <label>: clicking the caption operates the primary control.
+      root.querySelector('.caption').addEventListener('click', ev => {
+        if (SYNTHETIC.has(ev)) return;
+        ev.stopPropagation();
+        this._activate(this._primary(), null, ev);
+      });
+    }
     this._windows = [...root.querySelectorAll('.window')];
     this._controlsEl = root.querySelector('.controls');
     this._live = root.querySelector('.sr');
@@ -751,7 +642,7 @@ class RedstoneElement extends HTMLElement {
       c.btn.hidden = !r;
       if (r) place(c.btn, r);
     }
-    if (spec.label) {
+    if (spec.label && spec.label !== 'beside') {
       const signs = blocksOf(io[spec.label]).filter(b => world.get(b.x, b.y, b.z) === b);
       const r = union(signs.map(b => compat.rectOf(this._view, b, 'front')));
       this._labelEl.hidden = !r;

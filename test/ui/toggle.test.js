@@ -13,11 +13,10 @@ module.exports = {
       const off = controller(spec, {}, { text: 'Lights' });
       return on.state.checked === true && on.io.lever.on === true && off.state.checked === false;
     }),
-    T('the label sets the number of signs; no label, no signs', () => {
-      const long = controller(spec, {}, { text: 'Night lights' });
-      const short = controller(spec, {}, { text: 'Fan' });
-      const none = controller(spec, {}, { text: '' });
-      return long.io.signs.length > short.io.signs.length && short.io.signs.length === 1 && none.io.signs.length === 0;
+    T('the element hangs no signs: its label sits beside the machine', () => {
+      const labelled = controller(spec, {}, { text: 'Night lights' });
+      const bare = controller(spec, {}, { text: '' });
+      return labelled.io.signs.length === 0 && bare.io.signs.length === 0;
     }),
     T('length maps to the dust line, clamped', () => controller(spec, { length: '9' }).params.dust === 4),
     T('a flip fires input then change on the tick the lamp lights', () => {

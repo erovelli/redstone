@@ -92,7 +92,10 @@ Fluids and entities
 
 - **I1. One texture library.** Every pixel on a component canvas comes from the texture atlas through a block or entity model. No component calls canvas drawing functions.
 - **I2. One scale, one camera.** A block is `--rs-block` CSS pixels square (default 24) for everything on that component. The camera is the fixed oblique view (front face plus top face).
-- **I3. Text lives on text blocks or behind openings.** A label is on a sign, a hanging sign or a lectern book. Larger page content (an accordion body, a dialog) is ordinary HTML shown *through* a real opening the contraption makes (a door, pulled covers, glass). HTML is never painted over the front of blocks as if it were part of them, except on those text blocks.
+- **I3. Text is never painted over blocks.** It sits in one of three places.
+  - *Beside the machine*, as ordinary page text. This is the default for inline form controls (toggle, checkbox, radio, slider): the contraption is the control and its label stands next to it, like a native label (`label: 'beside'`).
+  - *On a text block* (a sign, a hanging sign, a lectern book) when the text is part of the machine: a nav destination, a button's caption, a chip, a tab, a tooltip. Sign text must be readable: at least 12 CSS px. A wall sign's board is half a block tall, so a component with sign text defaults to `--rs-block: 32px` or more, and a label spans as many adjacent signs as its measured width needs. If the text cannot be legible at the current block size, make the machine bigger or move the text beside it; never shrink the text.
+  - *Through an opening* the contraption really makes (a door, pulled covers, glass): accordion bodies, dialogs, panels. This is ordinary HTML behind the machine.
 - **I4. Motion is the engine's motion.** Sprites interpolate between engine states (a piston stroke is one tick). No CSS transitions pretending to be machinery.
 - **I5. Sound is block sound.** Piston, click, note block, bell, bucket: synthesised (no game assets), only after a user gesture, off under `prefers-reduced-motion`, and controlled by `Redstone.config.sound` (default `false` in the library; the docs site turns it on).
 - **I6. Reduced motion.** With `prefers-reduced-motion: reduce`, an input settles the world at once (`world.settle()`) and the final frame is drawn. State changes still come from the contraption.
@@ -287,3 +290,18 @@ Mechanism sketches are starting points, not orders. The designer may choose anot
 - Tests are deterministic: no timers, no randomness.
 - Do not push, do not open pull requests. Commit on the branch you were given.
 - Report at the end, briefly: branch and commit, files added or changed, what works, every deviation from this spec, any change you need in a file you do not own, and what you would do next.
+
+## 9. Status and ground rules for component work
+
+The foundation is merged: the engine with the block registry, strict worlds and `world.hand` (`docs/ENGINE.md` is the reference, including every simplification and the exact event shapes), the texture atlas and model renderer (`pages/textures.html` shows every texture and model; open it before inventing one), and the UI core with `rs-toggle` and `rs-button` as reference components (`docs/COMPONENTS.md` is the authoring guide). Read all three before writing a component.
+
+Facts worth knowing up front:
+- After `seal()`, `world.at`, `world.spawn` and `world.vibrate` throw as well as `put`/`set`/`shift`. Everything goes through `world.hand`. Calling `hand` from inside an event listener throws.
+- Blocks attached to a moved block get `popped: true` and emit `pop`; they do not become item entities.
+- Bells and signs cannot be pushed. Chests are not conductive. Copper bulbs do not conduct.
+- Non-strict worlds keep four legacy rule switches off (`qc`, `stretch`, `trapdoorPush`, `projectileHit`); strict worlds always have them on.
+- `view.rectOf(block, face)` faces: `front`, `top`, `cell`, `floor`, `back`, plus model rects (`board` and `text` for a sign, `hit` for a button).
+
+Shared files (`src/engine.js`, `src/render.js`, `src/textures.js`, `src/ui/core.js`, `src/ui/ui.css`, `src/catalogue.js`, `scripts/`, `pages/docs.html`, `docs/`, `README.md`, `package.json`) have no owner during component work. Prefer the extension points: `src/blocks/<type>.js` for a new block with its model and textures, `styles` and a component `.css` file for presentation. If a shared file has a real bug or is missing something small that you need, fix it in the smallest possible change, add an engine or core test for it, and list the change in your report so it can be merged by hand. Do not refactor shared files.
+
+A migrated legacy contraption keeps its catalogue id working (the workbench links to it) until its strict replacement is registered; then the legacy entry is removed in the same change.

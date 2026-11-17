@@ -8,15 +8,15 @@ Redstone.ui.define('rs-toggle', {
   params: {
     on: { attr: 'checked', type: 'boolean', doc: 'Start on. After that the attribute mirrors the lamp.' },
     dust: 'length',
-    signs: (el, ctx) => ctx.signsFor(ctx.text, { min: 0 }),
+    signs: () => 0,   // the element sets its label beside the machine; the builder can still hang signs
   },
 
-  // The light-DOM text goes on the oak wall signs.
-  label: 'signs',
+  // The light-DOM text sits beside the machine as ordinary page text, like a native label.
+  label: 'beside',
 
-  // The lever is a real focusable switch; clicking the label signs flips it too, like a native label.
+  // The lever is a real focusable switch; clicking the caption flips it too.
   controls: [
-    { io: 'lever', act: 'flip', role: 'switch', area: ['lever', 'signs'], aria: { checked: 'checked' } },
+    { io: 'lever', act: 'flip', role: 'switch', area: ['lever'], aria: { checked: 'checked' } },
   ],
 
   state: {

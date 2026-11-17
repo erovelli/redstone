@@ -11,8 +11,7 @@ const RS = N ? require('../../engine.js') : window.RS;
 const Catalogue = N ? require('../../catalogue.js') : window.Catalogue;
 const ui = () => (N ? require('../../ui/core.js') : window.Redstone.ui);
 
-// TODO(merge): 'smooth_stone' once the block registry lands; the legacy engine does not know it yet.
-const FLOOR = 'stone';
+const FLOOR = 'smooth_stone';
 
 const int = (v, min, max, def) => {
   const n = Math.round(Number(v));
@@ -36,7 +35,7 @@ function buildButton(p = {}) {
   const button = w.put(bx, 1, 0, 'button', { att: 'N', on: false, wood });
   for (let i = 1; i <= dust; i++) w.put(bx + i, 0, 0, 'dust');
   const lamp = w.put(lampX, 0, 0, 'lamp', { lit: false });
-  if (w.seal) w.seal();
+  w.seal();
   return { world: w, box: [0, lampX, 0, 1, -1, 0], io: { button, block, lamp, signs: signBlocks } };
 }
 

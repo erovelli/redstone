@@ -92,7 +92,7 @@ async function main() {
     check('--rs-block sets the block size per element', await page.$eval(fan, el => {
       const before = el.contraption.view.B;
       el.style.setProperty('--rs-block', '36px');
-      return before === 24 && el.contraption.view.B === 36 && el.shadowRoot.querySelector('canvas').width >= 36 * 6;
+      return before === 24 && el.contraption.view.B === 36 && el.shadowRoot.querySelector('canvas').width >= 36 * 4;
     }));
     const td = await page.$eval(fan, el => {
       const t = Redstone.ui.ticker, n = t.members.size, parent = el.parentNode, next = el.nextSibling;

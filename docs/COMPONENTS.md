@@ -29,7 +29,7 @@ const ui = () => (N ? require('../../ui/core.js') : window.Redstone.ui);   // la
 function buildToggle(p = {}) {
   const w = new RS.World({ strict: true });
   // ... w.put(x, y, z, type, state) for every block, in the steady state the engine settles into ...
-  if (w.seal) w.seal();
+  w.seal();
   return { world: w, box: [x0, x1, y0, y1, z0, z1], io: { lever, lamp, signs } };
 }
 
@@ -51,12 +51,11 @@ Catalogue.register({
 Rules for builders:
 
 - Coordinates: x east, y toward the viewer, z up. The camera sees front faces (y+) and top faces (z+). Keep the machine shallow: every row of depth adds 0.72 of a block of height.
-- Strict: `new RS.World({ strict: true })` and `w.seal && w.seal()` at the end. Real blocks only (SPEC 5.2); no `ground`, `wall`, `wallb`, no `world.floor`, no `buried`. Write the steady state the engine itself settles into, including derived state such as dust levels (`lvl`) and lamps (`lit`), so `testing.noDrift` passes from the first tick.
+- Strict: `new RS.World({ strict: true })` and `w.seal()` at the end. Real blocks only (SPEC 5.2); no `ground`, `wall`, `wallb`, no `world.floor`, no `buried`. Write the steady state the engine itself settles into, including derived state such as dust levels (`lvl`) and lamps (`lit`), so `testing.noDrift` passes from the first tick.
 - Use `category` from SPEC section 6 (`Navigation`, `Disclosure and overlays`, `Form controls`, `Feedback`, `Display`). The docs sidebar groups by it.
 - `io` holds block objects (or arrays of them). Name the label signs `signs` by convention, and any opening a list of cells in the built object (`opening: [[x, y, z], ...]`).
 - Boolean params are attribute presence, so they must default to `false`. A param that only the element sets (such as a start state) need not be in `params`; document it in `notes`.
 - Builders must accept strings too (`p.on === true || p.on === 'true'`): the workbench passes option values as strings.
-- Until the new engine lands, blocks it does not know (`smooth_stone`, `sign`, ...) are inert and not drawn. Prefer a block the current engine knows where conduction matters, and leave a `TODO(merge)` comment.
 
 ## 2. The element: `Redstone.ui.define(tag, spec)`
 
@@ -70,7 +69,7 @@ Redstone.ui.define('rs-toggle', {
     dust: 'length',
     signs: (el, ctx) => ctx.signsFor(ctx.text, { min: 0 }),
   },
-  label: 'signs',
+  label: 'beside',
   controls: [
     { io: 'lever', act: 'flip', role: 'switch', area: ['lever', 'signs'], aria: { checked: 'checked' } },
   ],
@@ -95,7 +94,7 @@ Redstone.ui.define('rs-toggle', {
 |---|---|---|
 | `entry` | string or entry object | Catalogue id to build (an unregistered entry object works for test elements). |
 | `params` | `{ paramKey: mapping }` | How the builder's params come from the element. Missing keys use the entry's defaults. |
-| `label` | io key | Light-DOM text (the default slot) is placed on these sign blocks. |
+| `label` | io key or `'beside'` | An io key places the light-DOM text (the default slot) on those sign blocks. `'beside'` sets it next to the machine as ordinary page text, like a native label; clicking it operates the primary control. Use `'beside'` for inline form controls and signs when the text is part of the machine (see SPEC I3). |
 | `opening` | object or array | Slotted content shown through a world opening; see below. |
 | `controls` | array | Focusable controls over interactive blocks; see below. |
 | `state` | `{ key: output }` | Outputs: each becomes a property (and optionally an attribute, events, an announcement). |
@@ -183,7 +182,7 @@ Show the default, one or two variants (attributes), and `disabled` where it appl
 
 `npm test` runs every catalogue entry's `tests` plus every `test/**/*.test.js`. Tests are deterministic: no timers, no randomness.
 
-**Contraption tests** (in the entry; SPEC 7.2). Use the helpers in `Redstone.ui.testing` (Node: `require('../../ui/core.js').testing`), which work on the current and the new engine:
+**Contraption tests** (in the entry; SPEC 7.2). Use the helpers in `Redstone.ui.testing` (Node: `require('../../ui/core.js').testing`):
 
 ```js
 const t = ui().testing;

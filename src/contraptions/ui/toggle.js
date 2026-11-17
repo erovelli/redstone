@@ -10,8 +10,7 @@ const RS = N ? require('../../engine.js') : window.RS;
 const Catalogue = N ? require('../../catalogue.js') : window.Catalogue;
 const ui = () => (N ? require('../../ui/core.js') : window.Redstone.ui);
 
-// TODO(merge): 'smooth_stone' once the block registry lands; the legacy engine does not know it yet.
-const FLOOR = 'stone';
+const FLOOR = 'smooth_stone';
 
 const int = (v, min, max, def) => {
   const n = Math.round(Number(v));
@@ -34,7 +33,7 @@ function buildToggle(p = {}) {
   const lever = w.put(x0, 0, 0, 'lever', { att: 'D', on });
   for (let i = 1; i <= dust; i++) w.put(x0 + i, 0, 0, 'dust', { lvl: on ? 16 - i : 0 });   // the levels the lever gives it
   const lamp = w.put(lamp_x, 0, 0, 'lamp', { lit: on });
-  if (w.seal) w.seal();
+  w.seal();
   return { world: w, box: [0, lamp_x, 0, signs ? 1 : 0, -1, 0], io: { lever, lamp, signs: signBlocks } };
 }
 
@@ -45,7 +44,7 @@ const entry = Catalogue.register({
   id: 'ui-toggle',
   name: 'Toggle switch',
   category: 'Form controls',
-  summary: 'A lever powers a short dust line into a redstone lamp. The switch is on while the lamp is lit; the label hangs on oak wall signs.',
+  summary: 'A lever powers a short dust line into a redstone lamp. The switch is on while the lamp is lit.',
   strict: true,
   deviations: [],
   inputs: ['lever'],
