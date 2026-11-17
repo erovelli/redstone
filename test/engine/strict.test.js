@@ -10,6 +10,12 @@ function leverLamp() {
 }
 
 const tests = [
+  T('hash() does not depend on the order entities were created in', () => {
+    const a = world(), b = world();
+    a.spawn('pearl', 1.5, 0.5, 2, {}); a.spawn('pearl', 3.5, 0.5, 2, {});
+    b.spawn('pearl', 3.5, 0.5, 2, {}); b.spawn('pearl', 1.5, 0.5, 2, {});
+    return a.hash() === b.hash();
+  }),
   T('the registry holds the SPEC 5.2 palette with Minecraft ids; legacy blocks are fake', () => {
     const palette = ['stone', 'bricks', 'planks', 'smooth_stone', 'iron', 'quartz', 'wool', 'concrete', 'glass', 'terracotta', 'obsidian', 'slime', 'honey',
       'rblock', 'lamp', 'bulb', 'target', 'noteblock', 'jukebox', 'barrel', 'furnace', 'chest', 'dispenser', 'dropper', 'hopper', 'lectern', 'bookshelf',

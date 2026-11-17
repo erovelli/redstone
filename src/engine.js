@@ -1473,7 +1473,7 @@ class World {
   // Deterministic signature of every block and entity (not the clock and not pending events).
   hash() {
     const parts = [...this.c.values()].map(b => this.stateOf(b)).sort();
-    for (const en of this.entities) if (!en.gone) parts.push(this._entityState(en));
+    parts.push(...this.entities.filter(en => !en.gone).map(en => this._entityState(en)).sort());   // entity order does not matter
     let a = 0x811c9dc5 | 0, c = 0x01000193 | 0;
     for (const p of parts) { a = strHash(p, a); c = strHash(p, mix(c, a)); a = strHash('|', a); }
     const hex = v => (v >>> 0).toString(16).padStart(8, '0');
