@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Redstone UI: drop-in web components where every component is a working redstone contraption.">
+<title>Redstone UI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Sans+Condensed:wght@400;600&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
+<script>
+  // Before first paint: the stored or preferred theme, so the page does not flash.
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem('rs-theme'); } catch (e) {}
+    if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.dataset.theme = t;
+  })();
+  // The library is silent by default; the docs turn block sounds on.
+  window.Redstone = { config: { sound: true } };
+</script>
+<style>
+:root{
+  --bg:#f3f0e6; --surface:#fbf9f3; --edge:#2a251f; --line:#d9d3c3; --text:#2a251f; --muted:#6b6355; --heading:#1a1612; --shadow:#2a251f;
+  --accent:#b8200e; --accent-soft:#f4d9d2; --ok:#2f7a37; --code-bg:#ebe6d8;
+  --display:"Pixelify Sans","Courier New",monospace; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace; --cond:"IBM Plex Sans Condensed","Arial Narrow",sans-serif;
+  --rs-focus:var(--accent); --rs-sign-font:"Pixelify Sans",ui-monospace,monospace; --rs-window-bg:#1d1a22; --rs-window-ink:#efe6d4;
+  color-scheme:light; box-sizing:border-box;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#17161a; --surface:#1f1e23; --edge:#0a0a0c; --line:#34323a; --text:#e8e3d8; --muted:#9a9488; --heading:#fff6e8; --shadow:#000;
+  --accent:#ff5a44; --accent-soft:#3a1a16; --ok:#6fcf78; --code-bg:#141317; color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#17161a; --surface:#1f1e23; --edge:#0a0a0c; --line:#34323a; --text:#e8e3d8; --muted:#9a9488; --heading:#fff6e8; --shadow:#000;
+  --accent:#ff5a44; --accent-soft:#3a1a16; --ok:#6fcf78; --code-bg:#141317; color-scheme:dark; }
+html{ scroll-padding-top:16px; scroll-behavior:smooth; }
+@media (prefers-reduced-motion: reduce){ html{ scroll-behavior:auto; } }
+*,*::before,*::after{ box-sizing:inherit; }
+body{ margin:0; background:var(--bg); color:var(--text); font-family:var(--mono); font-size:15px; line-height:1.6; }
+a{ color:var(--accent); text-decoration-thickness:1px; text-underline-offset:3px; }
+a:hover{ text-decoration-thickness:2px; }
+:focus-visible{ outline:2px dashed var(--accent); outline-offset:3px; }
+code{ font-family:var(--mono); font-size:.88em; background:var(--code-bg); padding:0 .3em; }
+.skip{ position:absolute; left:-999px; } .skip:focus{ left:12px; top:12px; background:var(--surface); padding:6px 10px; z-index:10; }
+.wrap{ max-width:1180px; margin:0 auto; padding:10px 16px 48px; }
+
+/* header */
+.top{ display:flex; justify-content:space-between; align-items:center; gap:10px 16px; flex-wrap:wrap; padding-bottom:10px; border-bottom:1px solid var(--line); }
+.brand{ display:flex; align-items:center; gap:8px; color:var(--heading); text-decoration:none; font-weight:500; }
+.brand i{ font-style:normal; font-family:var(--display); font-weight:700; background:var(--heading); color:var(--bg); padding:1px 5px; font-size:.85rem; }
+.top nav{ display:flex; align-items:center; gap:14px; font-size:.85rem; }
+.top nav a{ color:var(--muted); text-decoration:none; } .top nav a:hover{ color:var(--accent); }
+.lights{ --rs-block:20px; }
+.menu{ display:none; font:inherit; font-size:.8rem; border:2px solid var(--edge); background:var(--surface); color:var(--text); padding:3px 10px; cursor:pointer; }
+
+/* layout */
+.layout{ display:grid; grid-template-columns:210px minmax(0,1fr); gap:34px; margin-top:22px; }
+#side{ position:sticky; top:16px; align-self:start; max-height:calc(100vh - 32px); overflow:auto; font-size:.82rem; padding-right:6px; }
+#side nav{ display:flex; flex-direction:column; gap:1px; }
+#side a{ color:var(--text); text-decoration:none; padding:3px 8px; border-left:2px solid transparent; display:flex; justify-content:space-between; gap:8px; }
+#side a:hover{ color:var(--accent); }
+#side a.active{ border-left-color:var(--accent); background:var(--surface); color:var(--heading); }
+#side .group{ margin:14px 0 2px; padding-left:8px; font-size:.72rem; color:var(--muted); text-transform:lowercase; }
+#side .group::before{ content:"/ "; color:var(--accent); }
+#side a code{ background:none; padding:0; color:inherit; }
+#side .dot{ width:7px; height:7px; flex:none; align-self:center; background:var(--ok); }
+#side .dot.dev{ background:var(--accent); }
+
+/* type */
+h1{ font-family:var(--display); font-weight:700; color:var(--heading); font-size:clamp(2.2rem,8vw,4rem); line-height:1; margin:0; letter-spacing:-.01em; }
+h1 span{ color:var(--muted); font-weight:500; } h1 span::before{ content:"/"; color:var(--accent); margin:0 .12em 0 .05em; }
+h2{ font-family:var(--display); font-weight:700; font-size:clamp(1.5rem,5vw,2rem); line-height:1.1; color:var(--heading); margin:0 0 10px; }
+h3{ font-family:var(--display); font-weight:500; font-size:1.4rem; line-height:1.15; margin:0; color:var(--heading); }
+.label{ font-size:.78rem; color:var(--muted); text-transform:lowercase; margin:0 0 6px; } .label::before{ content:"/ "; color:var(--accent); }
+.lede{ font-size:1.02rem; max-width:62ch; margin:16px 0 0; }
+p{ max-width:72ch; }
+section.chapter{ margin-top:64px; }
+.btn{ display:inline-block; font:inherit; font-size:.85rem; padding:6px 12px; border:2px solid var(--edge); background:var(--surface); color:var(--heading); text-decoration:none; box-shadow:3px 3px 0 var(--shadow); cursor:pointer; }
+.btn:hover{ transform:translate(-1px,-1px); box-shadow:4px 4px 0 var(--shadow); }
+.btn.primary{ background:var(--accent); color:#fff; }
+.btn.small{ font-size:.74rem; padding:3px 9px; box-shadow:2px 2px 0 var(--shadow); }
+.btn[aria-pressed="true"]{ background:var(--heading); color:var(--bg); }
+.cta{ display:flex; flex-wrap:wrap; gap:12px; margin-top:20px; }
+.panel{ background:var(--surface); border:2px solid var(--edge); box-shadow:5px 5px 0 var(--shadow); }
+.rules{ margin:0; padding-left:1.4em; } .rules li{ margin:0 0 10px; max-width:72ch; } .rules b{ color:var(--heading); }
+.steps{ counter-reset:s; list-style:none; padding:0; margin:0; display:grid; gap:14px; }
+.steps > li{ counter-increment:s; display:grid; grid-template-columns:2.2em minmax(0,1fr); gap:0 10px; }
+.steps > li::before{ content:counter(s); font-family:var(--display); font-weight:700; font-size:1.3rem; color:var(--accent); line-height:1.2; }
+.flow{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:14px 0; font-size:.78rem; }
+.flow span{ border:2px solid var(--edge); background:var(--surface); padding:3px 8px; } .flow b{ color:var(--accent); font-weight:500; }
+
+/* snippets */
+.snippet{ border:2px solid var(--edge); background:var(--code-bg); margin-top:14px; min-width:0; }
+.snippet-bar{ display:flex; justify-content:space-between; align-items:center; padding:3px 6px 3px 10px; border-bottom:1px solid var(--line); font-size:.7rem; color:var(--muted); }
+.snippet pre{ margin:0; padding:10px 12px; overflow-x:auto; font-size:.8rem; line-height:1.5; }
+.snippet code{ background:none; padding:0; font-size:inherit; }
+
+/* component sections */
+.cat{ margin-top:64px; }
+.demo{ margin-top:40px; padding-top:8px; border-top:1px dashed var(--line); }
+.demo-head{ display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 12px; margin-bottom:6px; }
+.demo-head code{ font-size:.85rem; }
+.badge{ font-size:.7rem; border:1px solid currentColor; padding:0 7px; white-space:nowrap; }
+.badge.strict{ color:var(--ok); } .badge.dev{ color:var(--accent); }
+.mech{ margin:6px 0 0; }
+.facts{ display:grid; grid-template-columns:max-content minmax(0,1fr); gap:2px 14px; font-size:.78rem; margin:12px 0 0; }
+.facts dt{ color:var(--muted); } .facts dd{ margin:0; }
+.bench{ margin-top:16px; }
+.bench-bar{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:8px 10px; border-bottom:2px solid var(--edge); font-size:.74rem; color:var(--muted); }
+.bench-bar .grow{ flex:1; }
+.live{ display:flex; flex-wrap:wrap; align-items:center; gap:14px 22px; padding:22px 16px; background:
+  linear-gradient(var(--line) 1px, transparent 1px) 0 0/24px 24px, linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0/24px 24px; background-color:var(--bg); min-width:0; }
+.live .demo-form{ display:contents; }
+.events{ list-style:none; margin:0; padding:6px 10px; min-height:2.4em; max-height:8.5em; overflow:auto; font-size:.74rem; border-top:2px solid var(--edge); }
+.events li{ padding:1px 0; } .events li span{ color:var(--muted); display:inline-block; min-width:6ch; } .events b{ color:var(--accent); font-weight:500; }
+.events:empty::before{ content:"Events appear here when the contraption's output changes."; color:var(--muted); }
+.table-wrap{ overflow-x:auto; margin-top:14px; }
+table.api{ width:100%; border-collapse:collapse; font-size:.78rem; }
+table.api caption{ text-align:left; font-family:var(--display); font-size:1rem; color:var(--heading); padding:6px 0; }
+table.api th, table.api td{ text-align:left; vertical-align:top; padding:5px 10px 5px 0; border-bottom:1px solid var(--line); }
+table.api th{ font-weight:500; color:var(--muted); } table.api td:first-child{ white-space:nowrap; }
+.devs{ margin:10px 0 0; padding-left:1.2em; font-size:.8rem; color:var(--accent); }
+.demo-prose p{ margin:8px 0 0; }
+footer{ margin-top:60px; padding-top:16px; border-top:1px solid var(--line); font-size:.78rem; color:var(--muted); display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px 18px; }
+.hatch-demo{ --rs-block:36px; }
+.hatch-demo p{ margin:0; padding:4px 8px; font-family:var(--cond); font-size:15px; line-height:1.25; }
+
+@media (max-width: 860px){
+  .menu{ display:inline-block; }
+  .layout{ grid-template-columns:minmax(0,1fr); }
+  #side{ display:none; position:static; max-height:none; border:2px solid var(--edge); background:var(--surface); padding:10px; }
+  body.nav-open #side{ display:block; }
+}
+@media (max-width: 420px){
+  .top nav .wide{ display:none; }
+  .live{ padding:16px 10px; gap:12px 16px; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#top"><i>RS</i>redstone ui</a>
+    <nav aria-label="Site">
+      <button class="menu" id="menu" type="button" aria-expanded="false" aria-controls="side">Menu</button>
+      <a class="wide" href="#getting-started">Start</a>
+      <a href="catalogue.html">Workbench</a>
+      <rs-toggle class="lights" id="lights">Lights</rs-toggle>
+    </nav>
+  </header>
+  <script>document.getElementById('lights').toggleAttribute('checked', document.documentElement.dataset.theme !== 'dark');</script>
+
+  <div class="layout">
+    <aside id="side" aria-label="Documentation"></aside>
+    <main id="main" tabindex="-1">
+      <section id="top">
+        <p class="label">components v{{version}}</p>
+        <h1>Redstone<span>ui</span></h1>
+        <p class="lede">UI components that are working redstone contraptions. A click flips a lever or presses a button; the element's state changes when the lamp lights, the door is clear, or the pearl hits its target. Every machine can be rebuilt block for block in Minecraft Java 1.21.</p>
+        <div class="cta"><a class="btn primary" href="#getting-started">Get started</a><a class="btn" href="#components">Components</a><a class="btn" href="catalogue.html">Contraption workbench</a></div>
+      </section>
+
+      <section class="chapter" id="getting-started">
+        <p class="label">start</p>
+        <h2>Getting started</h2>
+        <ol class="steps">
+          <li><div><b>Add one script tag.</b> It defines every <code>&lt;rs-*&gt;</code> element and injects its CSS. No build step and no dependencies.
+            <div class="snippet"><div class="snippet-bar"><span>html</span><button type="button" class="copy">Copy</button></div><pre><code>&lt;script src="redstone-ui.js"&gt;&lt;/script&gt;</code></pre></div></div></li>
+          <li><div><b>Write ordinary-looking HTML.</b> Text inside an element is its label, written on the machine's signs. Without the script it is still readable HTML.
+            <div class="snippet"><div class="snippet-bar"><span>html</span><button type="button" class="copy">Copy</button></div><pre><code>&lt;form&gt;
+  &lt;rs-toggle name="lights" checked&gt;Lights&lt;/rs-toggle&gt;
+  &lt;rs-button&gt;Save&lt;/rs-button&gt;
+&lt;/form&gt;</code></pre></div></div></li>
+          <li><div><b>Listen as you would to native elements.</b> Events fire when the contraption's output changes, never on the raw click.
+            <div class="snippet"><div class="snippet-bar"><span>js</span><button type="button" class="copy">Copy</button></div><pre><code>document.querySelector('rs-toggle').addEventListener('change', e =&gt; {
+  console.log(e.target.checked);   // true once the lamp is lit
+});</code></pre></div></div></li>
+          <li><div><b>Size and options.</b> <code>--rs-block</code> sets the block size (12 to 48 px, default 24) and an element shrinks to fit narrow containers. <code>Redstone.config.sound = true</code> turns on block sounds (off by default, never before a user gesture, never with reduced motion). Put <code>data-rs-no-style</code> on the script tag and link <code>redstone-ui.css</code> yourself if you need a strict CSP. Add <code>inspect</code> to any element to x-ray it.</div></li>
+        </ol>
+      </section>
+
+      <section class="chapter" id="rules">
+        <p class="label">contract</p>
+        <h2>The rules</h2>
+        <p>Target: Minecraft Java Edition 1.21. A contraption that honours all six rules is <span class="badge strict">strict</span>. One that cannot yet lists each gap, and the list is shown with the component.</p>
+        <ol class="rules">
+          <li><b>Real blocks only.</b> Vanilla blocks with their vanilla movability, conductivity and stickiness. No invented wall or floor blocks.</li>
+          <li><b>Power comes only from propagation.</b> No wiring links, and no code sets a lamp, torch or piston after the build. The built state is the state the engine settles into.</li>
+          <li><b>Blocks move only because a powered piston moved them.</b> Code never moves blocks in a sealed world.</li>
+          <li><b>Time comes from redstone.</b> Repeaters, torches, comparators and observers sequence the machine. JavaScript watches the world; it never drives it.</li>
+          <li><b>The only thing code does to a world is a player action</b>, through <code>world.hand</code>: flip a lever, press a button, step on a plate, fill a barrel, turn a lectern page, write on a sign. Pointer and keyboard input map to these.</li>
+          <li><b>Nothing is hidden by fiat.</b> Helper blocks are out of sight only because other blocks are in front of them. Every component looks right in inspect (x-ray) mode.</li>
+        </ol>
+        <p>Text lives on signs and lecterns, or behind real openings. Motion is the engine's motion, one piston stroke per tick. With reduced motion the world settles at once and the final frame is drawn; the state still comes from the contraption.</p>
+      </section>
+
+      <section class="chapter" id="core">
+        <p class="label">core</p>
+        <h2>How a component works</h2>
+        <div class="flow" aria-label="Data flow"><span>pointer or key</span><b>→</b><span>world.hand action</span><b>→</b><span>redstone ticks</span><b>→</b><span>output block changes</span><b>→</b><span>property, attribute, event</span></div>
+        <p>Every element shares one base. It builds the contraption from its catalogue entry, draws it at <code>--rs-block</code> pixels per block, and puts real focusable controls over the blocks a player can use. One 100 ms ticker serves the whole page and skips worlds that are quiet or off-screen. Light-DOM content meets the blocks in two ways: text on a sign, or content shown through an opening the machine makes.</p>
+        <article class="demo" id="core-opening">
+          <div class="demo-head"><h3>Content through an opening</h3><code>&lt;rs-demo-hatch&gt;</code><span class="badge strict">test element</span></div>
+          <p class="mech">Two sticky pistons hold planks covers in a stone frame. Flip the lever off and the pistons pull the covers down; the slotted content is shown only once both cells of the opening are empty, and hidden again before the covers come back.</p>
+          <div class="bench panel">
+            <div class="bench-bar"><span class="grow">live</span><button type="button" class="btn small xray" aria-pressed="false">X-ray</button></div>
+            <div class="live" id="hatch-live">
+              <rs-demo-hatch class="hatch-demo" id="hatch"><p>Hello from the light DOM.</p></rs-demo-hatch>
+            </div>
+            <ol class="events" aria-label="Events"></ol>
+          </div>
+        </article>
+      </section>
+
+      <section class="chapter" id="components">
+        <p class="label">gallery</p>
+        <h2>Components</h2>
+        <p>Each section is generated from a demo file: the live example, its snippet, the API read from the component definition, and the mechanism and rule status read from the catalogue.</p>
+        <div id="gallery">
+<!--DEMOS-->
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer><span>Redstone UI {{version}} · original pixel art · not affiliated with Mojang</span><a href="catalogue.html">Contraption workbench</a></footer>
+</div>
+
+<script src="redstone-ui.js"></script>
+<script>
+(function () {
+  'use strict';
+  var R = window.Redstone, ui = R.ui, cat = R.catalogue;
+  var $ = function (s, el) { return (el || document).querySelector(s); };
+  var $$ = function (s, el) { return Array.prototype.slice.call((el || document).querySelectorAll(s)); };
+  var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+  var ORDER = ['Navigation', 'Disclosure and overlays', 'Form controls', 'Feedback', 'Display'];
+  var slug = function (s) { return s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''); };
+
+  /* the theme switch is an rs-toggle: the page follows its lamp, not the click */
+  var lights = $('#lights');
+  lights.addEventListener('change', function () {
+    var t = lights.checked ? 'light' : 'dark';
+    document.documentElement.dataset.theme = t;
+    try { localStorage.setItem('rs-theme', t); } catch (e) {}
+  });
+
+  /* the opening test element (core section): not a public component */
+  var RS = R.engine;
+  function buildHatch(p) {
+    var open = !!(p && p.open);
+    var w = new RS.World({ strict: true });
+    var put = function (x, y, z, t, o) { return w.put(x, y, z, t, o || {}); };
+    for (var x = 0; x <= 3; x++) for (var y = 0; y <= 2; y++) put(x, y, -2, 'stone');
+    for (var z = -1; z <= 2; z++) { put(0, 0, z, 'stone'); put(3, 0, z, 'stone'); }
+    put(1, 0, 2, 'stone'); put(2, 0, 2, 'stone');
+    var pistons = [], covers = [];
+    [1, 2].forEach(function (x) {
+      var pis = put(x, 0, -1, 'piston', { d: 'U', s: true, ext: !open });
+      pistons.push(pis);
+      if (!open) put(x, 0, 0, 'head', { d: 'U', s: true, p: pis });
+      covers.push(put(x, 0, open ? 0 : 1, 'planks'));
+    });
+    // The lever strongly powers the stone behind it, which powers piston 1; the lone dust (a cross) beside that
+    // stone picks up its power and points into piston 2.
+    put(1, 1, -1, 'stone');
+    var lever = put(1, 2, -1, 'lever', { att: 'N', on: !open });
+    put(2, 1, -1, 'dust', { lvl: open ? 0 : 15 });
+    if (w.seal) w.seal();
+    return { world: w, box: [0, 3, 0, 2, -2, 2], io: { lever: lever, pistons: pistons, covers: covers }, opening: [[1, 0, 1], [2, 0, 1]] };
+  }
+  ui.define('rs-demo-hatch', {
+    entry: { id: 'demo-hatch', name: 'Hatch', params: [], build: buildHatch, strict: true, deviations: [] },
+    params: { open: { attr: 'open', type: 'boolean' } },
+    controls: [{ io: 'lever', act: 'flip', role: 'switch', label: 'Hatch lever', aria: { checked: 'leverOn' } }],
+    opening: { cells: 'opening', shownWhen: 'open' },
+    state: {
+      open: { read: function (io, b) { return b.opening.every(function (c) { return !b.world.get(c[0], c[1], c[2]); }); }, attr: 'open', event: 'toggle',
+        set: function (hand, io, v) { if (io.lever.on === v) hand.flip(io.lever); }, announce: function (v) { return v ? 'Hatch open' : 'Hatch closed'; } },
+      leverOn: { read: function (io) { return !!io.lever.on; } },
+    },
+  });
+
+  /* gallery: one section per demo fragment, grouped by catalogue category */
+  var gallery = $('#gallery');
+  var groups = {};
+  $$('.demo-src').forEach(function (src) {
+    var sec = $('section.demo', src), tag = sec.getAttribute('data-tag');
+    var d = ui.describe(tag);
+    if (!d) { src.remove(); console.error('docs: ' + tag + ' is not defined'); return; }
+    var e = d.entry;
+    var prose = document.createElement('div'); prose.className = 'demo-prose';
+    $$(':scope > :not(.live):not(.snippet)', sec).forEach(function (n) { prose.appendChild(n); });
+    var live = $('.live', sec), snippet = $('.snippet', sec);
+    var devs = e.deviations || [];
+    var strict = e.strict && !devs.length;
+    sec.id = tag;
+    sec.innerHTML = '<div class="demo-head"><h3>' + esc(e.name) + '</h3><code>&lt;' + tag + '&gt;</code>' +
+      (strict ? '<span class="badge strict" title="Honours rules R1 to R6">strict</span>' : '<span class="badge dev">' + devs.length + ' deviation' + (devs.length === 1 ? '' : 's') + '</span>') + '</div>' +
+      '<p class="mech">' + esc(e.summary || '') + '</p>' +
+      '<dl class="facts"><dt>player action</dt><dd>' + esc((e.actions || []).join(', ') || 'none') + '</dd><dt>output</dt><dd>' + esc((e.outputs || []).join(', ')) + '</dd>' +
+      (e.timing ? '<dt>timing</dt><dd>' + esc(e.timing) + '</dd>' : '') + (d.keys.length ? '<dt>keys</dt><dd>' + esc(d.keys.join(', ')) + '</dd>' : '<dt>keys</dt><dd>Tab to the control, Space or Enter to use it</dd>') + '</dl>' +
+      (devs.length ? '<ul class="devs">' + devs.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '');
+    sec.appendChild(prose);
+    var bench = document.createElement('div'); bench.className = 'bench panel';
+    bench.innerHTML = '<div class="bench-bar"><span class="grow">live</span><button type="button" class="btn small xray" aria-pressed="false">X-ray</button></div>';
+    bench.appendChild(live);
+    var log = document.createElement('ol'); log.className = 'events'; log.setAttribute('aria-label', 'Events'); bench.appendChild(log);
+    sec.appendChild(bench);
+    sec.appendChild(snippet);
+    sec.insertAdjacentHTML('beforeend', '<div class="table-wrap">' + table('Attributes', d.attributes, true) + table('Properties', d.properties, true) + table('Events', d.events, false) + '</div>');
+    watch(live, log, d.events.map(function (x) { return x.name; }));
+    var c = e.category || 'Other';
+    (groups[c] = groups[c] || []).push({ el: src, e: e, tag: tag, strict: strict });
+  });
+  watch($('#hatch-live'), $('#core-opening .events'), ['toggle']);
+  function table(caption, rows, typed) {
+    if (!rows.length) return '';
+    return '<table class="api"><caption>' + caption + '</caption><thead><tr><th>Name</th>' + (typed ? '<th>Type</th>' : '') + '<th>Description</th></tr></thead><tbody>' +
+      rows.map(function (r) { return '<tr><td><code>' + esc(r.name) + '</code></td>' + (typed ? '<td>' + esc(r.type || '') + '</td>' : '') + '<td>' + esc(r.doc || '') + '</td></tr>'; }).join('') + '</tbody></table>';
+  }
+  // The event log shows what page code would see: the component's own events, and form submits.
+  function watch(live, log, types) {
+    var t0 = performance.now();
+    var add = function (html) {
+      var li = document.createElement('li');
+      li.innerHTML = '<span>' + ((performance.now() - t0) / 1000).toFixed(1) + 's</span> ' + html;
+      log.prepend(li);
+      while (log.children.length > 30) log.lastChild.remove();
+    };
+    types.forEach(function (type) {
+      live.addEventListener(type, function (ev) {
+        var el = ev.target;
+        if (!el.localName || el.localName.indexOf('rs-') !== 0) return;
+        var name = el.getAttribute('name') || el.textContent.trim() || el.localName;
+        var d = ui.describe(el.localName), props = d ? d.properties.filter(function (p) { return p.name !== 'contraption'; }) : [];
+        add('<b>' + type + '</b> ' + esc(el.localName + ' ' + name) + ' ' + esc(props.map(function (p) { return p.name + '=' + el[p.name]; }).join(' ')));
+      });
+    });
+    live.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var pairs = [];
+      new FormData(ev.target).forEach(function (v, k) { pairs.push(k + '=' + v); });
+      add('<b>submit</b> ' + esc(pairs.join('&') || '(no fields)'));
+    });
+    live.addEventListener('reset', function () { add('<b>reset</b> form'); });
+  }
+  var names = Object.keys(groups).sort(function (a, b) {
+    var i = ORDER.indexOf(a), j = ORDER.indexOf(b);
+    return (i < 0 ? 99 : i) - (j < 0 ? 99 : j) || a.localeCompare(b);
+  });
+  names.forEach(function (c) {
+    var box = document.createElement('section'); box.className = 'cat'; box.id = 'cat-' + slug(c);
+    box.innerHTML = '<p class="label">category</p><h2>' + esc(c) + '</h2>';
+    groups[c].forEach(function (g) { box.appendChild(g.el); });
+    gallery.appendChild(box);
+  });
+
+  /* sidebar */
+  var side = $('#side');
+  side.innerHTML = '<nav aria-label="Documentation"><p class="group">start</p><a href="#getting-started">Getting started</a><a href="#rules">The rules</a><a href="#core">How a component works</a>' +
+    names.map(function (c) {
+      return '<p class="group">' + esc(c.toLowerCase()) + '</p>' + groups[c].map(function (g) {
+        return '<a href="#' + g.tag + '">' + esc(g.e.name) + '<i class="dot' + (g.strict ? '' : ' dev') + '" title="' + (g.strict ? 'strict' : 'has deviations') + '"></i></a>';
+      }).join('');
+    }).join('') + '<p class="group">more</p><a href="catalogue.html">Workbench</a></nav>';
+  var links = $$('a[href^="#"]', side);
+  var setMenu = function (open) { document.body.classList.toggle('nav-open', open); $('#menu').setAttribute('aria-expanded', open); };
+  $('#menu').addEventListener('click', function () { setMenu(!document.body.classList.contains('nav-open')); });
+  side.addEventListener('click', function (ev) { if (ev.target.closest('a')) setMenu(false); });
+  if ('IntersectionObserver' in window) {
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (!en.isIntersecting) return;
+        links.forEach(function (a) { a.classList.toggle('active', a.getAttribute('href') === '#' + en.target.id); });
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    links.forEach(function (a) { var t = document.getElementById(a.getAttribute('href').slice(1)); if (t) spy.observe(t); });
+  }
+
+  /* x-ray switches and copy buttons */
+  document.addEventListener('click', function (ev) {
+    var x = ev.target.closest && ev.target.closest('.xray');
+    if (x) {
+      var on = x.getAttribute('aria-pressed') !== 'true';
+      x.setAttribute('aria-pressed', on);
+      $$('*', x.closest('.bench')).forEach(function (el) { if (el.localName.indexOf('rs-') === 0) el.inspect = on; });
+      return;
+    }
+    var copy = ev.target.closest && ev.target.closest('.copy');
+    if (copy) {
+      var text = copy.closest('.snippet').querySelector('code').textContent;
+      var done = function () { copy.textContent = 'Copied'; setTimeout(function () { copy.textContent = 'Copy'; }, 1200); };
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
+    }
+  });
+  $$('.copy').forEach(function (b) { b.className = 'btn small copy'; });
+  if (location.hash) { var t = document.getElementById(location.hash.slice(1)); if (t) t.scrollIntoView(); }
+})();
+</script>
+</body>
+</html>

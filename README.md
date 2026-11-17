@@ -1,28 +1,65 @@
 # redstone
 
-A 3D redstone tick engine with a catalogue of tested, parametric contraptions, a fixed-perspective renderer, and a browser test bench.
+Drop-in UI components where every component is a working Minecraft redstone contraption, on a zero-dependency 3D redstone tick engine.
 
-Each contraption is a standalone builder with named inputs and outputs, adjustable parameters, and automated tests that run against the same engine used for rendering. Contraptions can be embedded in any page by building them and handing the result to the renderer.
+```html
+<script src="redstone-ui.js"></script>
+
+<form>
+  <rs-toggle name="lights" checked>Lights</rs-toggle>
+  <rs-button>Save</rs-button>
+</form>
+```
+
+The contraption is the widget's state machine. A click is a player action (flip the lever, press the button); `checked` changes and `change` fires when the lamp lights, not when the pointer goes down. Every component is meant to be rebuildable block for block in Minecraft Java 1.21 (the rules are in [docs/SPEC.md](docs/SPEC.md), section 3), and each one is form-associated, keyboard operable and announced to screen readers.
 
 ## Quick start
 
 ```
-npm test          # runs every catalogue entry's tests (no dependencies)
-npm run build     # writes dist/catalogue.html (self-contained site) and dist/redstone.js (library bundle)
+npm test                # engine, every catalogue entry, and the UI suites (no dependencies)
+npm run build           # dist/redstone-ui.js, dist/redstone-ui.css, dist/index.html (docs), dist/catalogue.html (workbench)
+npm run test:browser    # optional: Playwright smoke test of the reference components (skipped without Playwright)
+node scripts/shot.js toggle --width 320 --dark   # screenshot one gallery section
 ```
 
-Open `dist/catalogue.html` in a browser. Requires Node 18+ and Python 3.
+Requires Node 18+. Open `dist/index.html` for the component gallery and `dist/catalogue.html` for the contraption workbench.
+
+In a page, one script tag defines `window.Redstone` and every `<rs-*>` element, and injects the CSS (add `data-rs-no-style` to the tag and link `redstone-ui.css` yourself for a strict CSP). `--rs-block` sets the block size (12 to 48 px, default 24); `Redstone.config.sound = true` turns on synthesised block sounds; the `inspect` attribute shows any component in x-ray.
+
+| `window.Redstone` | |
+|---|---|
+| `ui` | `define(tag, spec)`, `describe(tag)`, test helpers. See [docs/COMPONENTS.md](docs/COMPONENTS.md). |
+| `engine` | The tick engine (`World`, ...). See `docs/ENGINE.md` once it lands, and the engine model below. |
+| `catalogue` | Every contraption: `entries`, `get(id)`, `register(entry)`, `runTests(entry)`. |
+| `render`, `textures` | The renderer and the texture atlas. |
+| `config`, `version` | `{ sound }`, the package version. |
+
+In Node, `require('redstone')` returns the catalogue (with `.engine`), `require('redstone/engine')` the engine and `require('redstone/ui')` the headless half of the UI core.
+
+## Documents
+
+- [docs/SPEC.md](docs/SPEC.md): the working specification: the rules contract, immersion rules, architecture, the component list and the definition of done.
+- [docs/COMPONENTS.md](docs/COMPONENTS.md): how to write a component: the exact `Redstone.ui.define` API, a worked example, accessibility checklist, demo fragments and tests.
+- `docs/ENGINE.md`: the engine and block registry (being written).
 
 ## Layout
 
 ```
-src/engine.js              World (3D tick engine) and shared sub-circuits: addLatch, addSequencer
-src/render.js              Renderer: front + top faces, sprites, depth tint and ghosting, entities; nav wall (makeNavView)
-src/catalogue.js           Registry: metadata, params, controls, build(), monitor(), tests
-src/contraptions/          Builders: logic.js, scenes.js, door.js, pistondoor.js, hidden.js, plaque.js, launcher.js
-pages/                     Catalogue site (hash-routed, single file after build)
-test/run.js                Test runner
-build.py                   Inlines everything into dist/catalogue.html; bundles the library into dist/redstone.js
+src/engine.js                 World (3D tick engine) and shared sub-circuits
+src/blocks/*.js               extra block definitions, one per file, self-registering
+src/contraptions/*.js         legacy builders: logic, scenes, doors, plaque, launcher
+src/catalogue.js              legacy entries, registry (register, get), generic tests
+src/contraptions/ui/*.js      UI contraptions: builder + Catalogue.register(entry) with tests
+src/render.js                 renderer: front + top faces, sprites, ghosting, entities
+src/ui/core.js                custom-element base: ticker, sleep, resize, inspect, a11y, forms, sound
+src/ui/ui.css                 page-level CSS (per-component CSS sits next to each component)
+src/ui/components/*.js        one <rs-*> element per file
+src/index.js                  Node entry
+pages/docs.html               docs site (dist/index.html); pages/demos/*.html are its gallery sections
+pages/catalogue.html, catalogue-app.js   the contraption workbench (dist/catalogue.html)
+scripts/build.js              the build (plain Node, discovers files in load order)
+scripts/shot.js, smoke.js     screenshot helper, browser smoke test
+test/run.js                   catalogue tests + every test/**/*.test.js suite
 ```
 
 ## Catalogue
@@ -51,6 +88,8 @@ build.py                   Inlines everything into dist/catalogue.html; bundles 
 | | Flush 2x2 hidden door (`hidden-2x2`) | lever or sculk latch, reset | 2x2 passage | trigger |
 | | Hidden plaque (`hidden-plaque`) | lever or sculk latch, reset | text bands | width, bands, trigger |
 | Navigation | Ender pearl launcher (`pearl-launcher`) | button per item | item launched toward the viewer | items |
+| Form controls | Toggle switch (`ui-toggle`, `<rs-toggle>`) | lever | lamp | signs, dust |
+| | Push button (`ui-button`, `<rs-button>`) | stone button | lamp pulse | signs, dust, wood |
 
 The catalogue site lists the same entries with timing, footprint, part counts, notes, and a live bench.
 
@@ -66,7 +105,7 @@ setInterval(() => c.world.tick(), 100);  // 1 redstone tick = 100 ms
 RSR.makeView(stageElement, c);           // render (browser)
 ```
 
-In another page, load `dist/redstone.js` (one script tag). It defines `RS`, `Logic`, `Scenes`, the `build*` functions, `Catalogue` and `RSR`. In Node, `require('redstone')` returns the catalogue and `require('redstone/engine')` the engine.
+In another page, load `dist/redstone-ui.js`: `Redstone.catalogue`, `Redstone.engine` and `Redstone.render` are the same objects. The legacy globals (`RS`, `Logic`, `Scenes`, the `build*` functions, `Catalogue`, `RSR`) still exist for the workbench but are internal.
 
 Inputs: levers (`on`), buttons and plates (`on`; the caller releases them after 10 or 30 ticks), sculk sensors (`world.vibrate(x, y, z)`), barrels (`fill`), repeaters (`delay`).
 
@@ -90,7 +129,7 @@ Inputs: levers (`on`), buttons and plates (`on`; the caller releases them after 
 1. Write a builder in `src/contraptions/` that returns `{ world, box, io }`. Coordinates: x east, y toward the viewer, z up. Place a ground layer at z = -1.
 2. Register it in `src/catalogue.js` with metadata, params, controls, and at least one test that drives inputs and asserts outputs. If the `timing` string gives tick counts, add a test that asserts them.
 3. If it can be repeated (doors, launchers), test that a full cycle returns every block to its starting state.
-4. If it is a new file, add it to `parts` in `build.py` and a placeholder in `pages/catalogue.html`.
+4. New files are picked up by `scripts/build.js` automatically (see the load order in docs/SPEC.md section 5). UI contraptions go in `src/contraptions/ui/` and register themselves; see docs/COMPONENTS.md.
 5. Run `npm test`.
 
 Every entry also gets generic tests from `testsOf(entry)`: it is built through `build(params)` at each parameter's min, default and max (and every option), and `box`, `io`, `controls` and `monitor` must be consistent. Entries with a `lever` control must return every block to its start after two on/off cycles at each of those settings.
@@ -129,7 +168,7 @@ Every entry also gets generic tests from `testsOf(entry)`: it is built through `
 
 ## CI
 
-`.github/workflows/ci.yml` runs the tests and the build on every push and pull request, and deploys `dist/` (with the catalogue as `index.html`) to GitHub Pages from `main`. Enable Pages under Settings > Pages > Source: GitHub Actions.
+`.github/workflows/ci.yml` runs `npm test` and `npm run build` on every push and pull request, and deploys `dist/` (the docs as `index.html`, the workbench as `catalogue.html`) to GitHub Pages from `main`. Enable Pages under Settings > Pages > Source: GitHub Actions.
 
 ## License
 

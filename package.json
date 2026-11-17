@@ -2,15 +2,34 @@
   "name": "redstone",
   "version": "0.1.0",
   "private": true,
-  "description": "A 3D redstone tick engine with a catalogue of tested, parametric contraptions and a browser test bench.",
+  "description": "Drop-in UI components that are working Minecraft redstone contraptions, on a zero-dependency 3D redstone tick engine.",
+  "keywords": ["redstone", "web-components", "custom-elements", "ui", "minecraft"],
   "main": "src/index.js",
+  "browser": "dist/redstone-ui.js",
+  "unpkg": "dist/redstone-ui.js",
+  "jsdelivr": "dist/redstone-ui.js",
+  "style": "dist/redstone-ui.css",
   "exports": {
     ".": "./src/index.js",
-    "./engine": "./src/engine.js"
+    "./engine": "./src/engine.js",
+    "./ui": "./src/ui/core.js",
+    "./browser": "./dist/redstone-ui.js",
+    "./redstone-ui.js": "./dist/redstone-ui.js",
+    "./redstone-ui.css": "./dist/redstone-ui.css",
+    "./package.json": "./package.json"
   },
+  "files": [
+    "src/",
+    "dist/redstone-ui.js",
+    "dist/redstone-ui.css",
+    "docs/"
+  ],
   "scripts": {
     "test": "node test/run.js",
-    "build": "python3 build.py"
+    "build": "node scripts/build.js",
+    "test:browser": "node scripts/smoke.js",
+    "shot": "node scripts/shot.js",
+    "prepack": "node scripts/build.js && node test/run.js"
   },
   "engines": {
     "node": ">=18"
