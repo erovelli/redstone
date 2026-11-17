@@ -1,0 +1,8 @@
+/* rs-toast, rs-alert: before the element upgrades, the message is plain text in a bordered box (an alert is
+   visible; a toast only when it has the open attribute). */
+rs-toast:not(:defined), rs-alert:not(:defined) {
+  display: inline-block;
+  padding: .3em .6em;
+  border: 2px solid currentColor;
+}
+rs-toast:not(:defined):not([open]) { display: none; }
