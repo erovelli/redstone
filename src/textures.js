@@ -326,7 +326,7 @@ const T = (name, paint, opt) => {
 
 const STONE = ['#7a7a7a', '#7f7f7f', '#7f7f7f', '#858585', '#7c7c7c'];
 const OAK = { seam: '#5e4526', dark: '#866737', base: '#a5834d', light: '#b8945b', hi: '#c6a36b' };
-const DARKWOOD = { seam: '#2e1c12', dark: '#4a2e1f', base: '#5c3a28', light: '#6e4732', hi: '#80563d' };
+const DARKWOOD = { seam: '#331f14', dark: '#553524', base: '#68432e', light: '#7a5139', hi: '#8e6245' };
 
 /* ---------- stone family ---------- */
 
@@ -699,14 +699,11 @@ function paintDarkWood(px) {
 
 T('block/note_block', (ctx, px) => {
   paintDarkWood(px);
+  // Planks with a darker frame; a small sound hole in the middle tells it from a jukebox.
+  for (const y of [5, 10]) px.rect(1, y, 14, 1, DARKWOOD.seam);
+  for (const [x, y] of [[9, 1], [4, 6], [11, 11]]) px.rect(x, y, 1, 4, DARKWOOD.dark);
   px.bevel(DARKWOOD.hi, DARKWOOD.seam);
-  // speaker grille: three rows of slots
-  for (const y of [4, 8, 12]) {
-    for (let x = 2; x < 14; x += 4) {
-      px.rect(x, y - 1, 3, 1, '#1d110a');
-      px.rect(x, y, 3, 1, DARKWOOD.hi);
-    }
-  }
+  px.rect(7, 7, 2, 2, '#1d110a');
 });
 
 T('block/jukebox_side', (ctx, px) => {
@@ -1309,7 +1306,7 @@ T('block/water_still', (ctx, px, f) => {
   px.each((x, y) => {
     const w = Math.sin(x * 0.55 + y * 0.35 + phase) + Math.sin(y * 0.8 - x * 0.2 - phase * 2) * 0.6;
     const v = w > 1.1 ? 236 : w > 0.3 ? 206 : w > -0.6 ? 186 : 172;
-    return `rgba(${v},${v},${v},0.66)`;
+    return `rgba(${v},${v},${v},0.52)`;
   });
 }, { frames: 16, frametime: 2 });
 
@@ -1317,7 +1314,7 @@ T('block/water_flow', (ctx, px, f) => {
   px.each((x, y) => {
     const w = Math.sin((y + f) * 0.9 + Math.sin(x * 0.7) * 1.2);
     const v = w > 0.6 ? 230 : w > -0.2 ? 196 : 176;
-    return `rgba(${v},${v},${v},0.66)`;
+    return `rgba(${v},${v},${v},0.52)`;
   });
 }, { frames: 16, frametime: 2 });
 

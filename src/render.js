@@ -645,7 +645,8 @@ defineModel('sign', {
   },
   rects: b => {
     const [from, to] = signBoard(b);
-    return { text: [[from[0] + 1, from[1], from[2] + 1], [to[0] - 1, to[1], to[2] - 1]], board: [from, to] };
+    // 'front' is the whole board (the UI core lays sign text over it); 'text' leaves a 1px frame.
+    return { front: [from, to], board: [from, to], text: [[from[0] + 1, from[1], from[2] + 1], [to[0] - 1, to[1], to[2] - 1]] };
   },
 });
 
@@ -1130,6 +1131,14 @@ function drawView(v, now) {
     return isFn(m.opaque) ? !!m.opaque(n) : !!m.opaque;
   };
 
+  // In inspect mode a ghost behind another ghost fades further, so the nearest layer reads and deep walls do not
+  // pile up into a grey wash.
+  const ghostAlpha = b => {
+    if (v.ghost && v.ghost(b)) return v.ghostOpacity === undefined ? 0.1 : v.ghostOpacity;
+    const n = w.get(b.x, b.y + 1, b.z);
+    return n && inBox(n) && ghosted(n) ? INSPECT_GHOST_ALPHA * 0.4 : INSPECT_GHOST_ALPHA;
+  };
+
   const items = [];
   for (const b of w.c.values()) {
     if (!inBox(b) || skipped(b)) continue;
@@ -1184,7 +1193,7 @@ function drawView(v, now) {
     const b = it.b;
     const m = modelOf(b);
     const gh = ghosted(b);
-    env.alpha = gh ? (v.ghost && v.ghost(b) ? (v.ghostOpacity === undefined ? 0.1 : v.ghostOpacity) : INSPECT_GHOST_ALPHA) : 1;
+    env.alpha = gh ? ghostAlpha(b) : 1;
     env.dark = !gh && v.tint ? Math.round(clamp(v.tint(b) || 0, 0, 1) * 20) / 20 : 0;
     env.off = it.off;
     env.block = b;
@@ -1200,7 +1209,11 @@ function drawView(v, now) {
     if (m.animated && (isFn(m.animated) ? m.animated(b) : true)) env.animate(50);
     const g = m.glow && m.glow(b, env);
     if (g) drawGlow(env, b, g);
-    if (gh) drawOutline(env, b, inspect ? powerState(env, b) : 'legacy');
+    if (gh) {
+      // Outline powered blocks (red strong, orange weak) and the nearest layer of unpowered ones.
+      const state = inspect ? powerState(env, b) : 'legacy';
+      if (state !== 'none' || env.alpha === INSPECT_GHOST_ALPHA) drawOutline(env, b, state);
+    }
     if (inspect && m.digits) {
       const n = m.digits(b);
       if (n > 0) digitList.push({ b, n, off: it.off });
@@ -1277,15 +1290,15 @@ function drawLinks(env) {
   const w = env.world;
   for (const L of w.floor || []) {
     const fed = (w.strong && w.strong.get(RS.K(...L.feed))) > 0;
-    const tint = fed ? '#ff3a1c' : '#6a2a22';
+    const tint = fed ? '#ff3a1c' : '#8a3a30';
     const a = v.pt(L.feed[0] + 0.5, L.feed[1] + 1, L.feed[2] + 0.5);
     for (const c of L.cells) {
       const q = v.pt(c[0] + 0.5, c[1] + 1, c[2] + 0.5);
       const len = Math.hypot(q.x - a.x, q.y - a.y);
-      const n = Math.max(2, Math.round(len / Math.max(4, v.B / 3)));
-      const s = Math.max(4, v.B / 4);
+      const n = Math.max(2, Math.round(len / Math.max(6, v.B / 2)));
+      const s = Math.max(3, Math.round(v.B / 6));
       const img = variant('rs/link_dot', 0, 0, tint, 1, 0);
-      v.ctx.globalAlpha = 0.95;
+      v.ctx.globalAlpha = fed ? 0.95 : 0.45;
       for (let i = 0; i <= n; i++) {
         const x = a.x + ((q.x - a.x) * i) / n;
         const y = a.y + ((q.y - a.y) * i) / n;
