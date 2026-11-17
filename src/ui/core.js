@@ -479,7 +479,7 @@ class RedstoneElement extends HTMLElement {
     root.innerHTML = `<style>${BASE_CSS}${spec.styles || ''}</style>
       <div class="box rs-own" part="box">
         <div class="stage" part="stage" aria-hidden="true"></div>
-        <div class="label" part="label" aria-hidden="true">${labelSlot}</div>
+        <div class="label" part="label"${spec.readLabel ? '' : ' aria-hidden="true"'}>${labelSlot}</div>
         ${openings.map((o, i) => `<div class="window" part="window" data-i="${i}" hidden><slot${o.slot ? ` name="${o.slot}"` : ''}></slot></div>`).join('')}
         <div class="controls"></div>
       </div>
@@ -726,6 +726,7 @@ class RedstoneElement extends HTMLElement {
         else this.setAttribute(st.attr, String(v));
       }
     });
+    if (spec.host) this._syncHost(spec.host, state);
     for (const c of this._controls || []) {
       for (const [ariaName, key] of Object.entries(c.spec.aria || {})) {
         const v = typeof key === 'function' ? key(state, this) : state[key];
@@ -758,8 +759,25 @@ class RedstoneElement extends HTMLElement {
     }
     if (said.length) this._announce(said.join('. '));
   }
+  // spec.host: { role, aria: { valuenow: key | (state, el) => value } } on the element itself (ElementInternals
+  // where supported, else attributes the author has not set). null or undefined removes the property.
+  _syncHost(host, state) {
+    const set = (name, v) => {
+      const prop = name === 'role' ? 'role' : 'aria' + name.replace(/(^|-)([a-z])/g, (m, d, c) => c.toUpperCase());
+      const value = v === null || v === undefined ? null : String(v);
+      if (this._internals && prop in this._internals) this._internals[prop] = value;
+      else {
+        const attr = name === 'role' ? 'role' : 'aria-' + name;
+        if (value === null) this.removeAttribute(attr);
+        else this.setAttribute(attr, value);
+      }
+    };
+    if (host.role) set('role', typeof host.role === 'function' ? host.role(this) : host.role);
+    for (const [name, key] of Object.entries(host.aria || {})) set(name, typeof key === 'function' ? key(state, this) : state[key]);
+  }
   _fire(type, change) {
-    const init = { bubbles: true, cancelable: type === 'click', composed: type === 'click' || type === 'input' };
+    const st = this._def.spec.state[change.key] || {};
+    const init = { bubbles: true, cancelable: type === 'click' || !!st.cancelable, composed: type === 'click' || type === 'input' };
     const ev = type === 'click' ? new MouseEvent('click', init) : new CustomEvent(type, Object.assign({ detail: { key: change.key, value: change.value, prev: change.prev } }, init));
     SYNTHETIC.add(ev);
     this.dispatchEvent(ev);
@@ -785,7 +803,14 @@ class RedstoneElement extends HTMLElement {
     }
     if (Object.is(ctl.state[key], value)) return;
     ctl.request(key, value);
+    if (this._def.spec.state[key].settle === false) {
+      // A timed output (a toast's timer): let the world run, so its events fire as the output changes.
+      this._awake = true;
+      if (this._view) this._view.draw(performance.now());
+      return;
+    }
     const changes = ctl.settle();
+    this._awake = !ctl.quiet();   // a clock started by the request keeps running
     this._apply(ctl.state, changes, true);
     this._layout();
     if (this._view) this._view.draw(performance.now());
