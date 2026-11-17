@@ -582,7 +582,9 @@ class RedstoneElement extends HTMLElement {
       avail = parent.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
     }
     if (!(avail > 0)) avail = Infinity;
-    return Math.max(12, Math.min(want, Math.floor(avail / cols)));
+    // spec.minBlock: never shrink below this (sign text stays legible); the element scrolls instead.
+    const floor = Math.max(12, Math.min(want, this._def.spec.minBlock || 12));
+    return Math.max(floor, Math.min(want, Math.floor(avail / cols)));
   }
   _mountView() {
     const R = RSR();
@@ -597,6 +599,8 @@ class RedstoneElement extends HTMLElement {
     this._box.style.height = view.H + 'px';
     this._makeControls();
     this._layout();
+    // spec.mounted(el, view, built): the element may add its own overlays (rs-navbar's links and pearl sky).
+    if (this._def.spec.mounted) this._def.spec.mounted(this, view, this._ctl.built);
     view.draw(performance.now());
   }
   _teardownView() {

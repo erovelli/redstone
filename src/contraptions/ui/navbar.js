@@ -35,7 +35,7 @@ const RS = N ? require('../../engine.js') : window.RS;
 const Catalogue = N ? require('../../catalogue.js') : window.Catalogue;
 const ui = () => (N ? require('../../ui/core.js') : window.Redstone.ui);
 
-const WALL = 'planks';
+const WALL = 'bricks';
 const MIN_SIGNS = 2;
 const MAX_SIGNS = 3;
 

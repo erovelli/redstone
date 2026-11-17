@@ -1,0 +1,18 @@
+<section class="demo" data-tag="rs-navbar">
+  <p>Each link is an ender pearl in a stasis chamber. Press one: the chamber drains, the pearl drops onto slime and two pistons fling it up and across the page. The page follows the link when the pearl has left the screen; cancel <code>rs-navigate</code> to route it yourself (the demo below does, and logs it). With reduced motion it navigates at once. Narrower than its wall, it scrolls sideways rather than shrinking the signs.</p>
+  <!-- example -->
+  <rs-navbar id="demo-nav">
+    <a href="#home" aria-current="page">Home</a>
+    <a href="#docs">Docs</a>
+    <a href="#blog">Blog</a>
+  </rs-navbar>
+  <!-- /example -->
+  <script>
+    // The docs page stays put: mark the chosen link as current instead of following it.
+    document.getElementById('demo-nav').addEventListener('rs-navigate', function (ev) {
+      ev.preventDefault();
+      ev.currentTarget.querySelectorAll('a').forEach(function (a) { a.removeAttribute('aria-current'); });
+      ev.detail.link.setAttribute('aria-current', 'page');
+    });
+  </script>
+</section>
