@@ -624,6 +624,22 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-breadcrumb');
+  {
+    const { page, errors } = await open(browser);
+    const bc = 'rs-breadcrumb';
+    await page.locator(bc).scrollIntoViewIfNeeded();
+    check('breadcrumb: the signal walks out to the current page on load', await until(page, s => document.querySelector(s).arrived === true, bc));
+    check('breadcrumb: a navigation landmark; the last crumb is aria-current="page"; links sit on the signs', await page.$eval(bc, el => {
+      const a = el.children[0].getBoundingClientRect(), box = el.shadowRoot.querySelector('.box').getBoundingClientRect();
+      return el._internals.role === 'navigation' && el.children[2].getAttribute('aria-current') === 'page' && a.height > 0 && a.top >= box.top && a.bottom <= box.bottom;
+    }));
+    await page.locator(bc + ' a').nth(1).click();
+    check('breadcrumb: the links are ordinary links', await page.evaluate(() => location.hash === '#rs-tabs'));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });
