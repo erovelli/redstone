@@ -53,14 +53,15 @@ Rule checks that found nothing anywhere: no element or contraption writes block 
 
 ## Behaviour bugs
 
-| Component | Bug | Fix |
-|---|---|---|
-| rs-toast | Old timer pulse closes a re-shown toast; `<rs-toast open>` never closes. | Pending. |
-| rs-modal, rs-popover | The later of two presses 1 to 4 ticks apart did not always win. | Pending. |
-| rs-progress | Indeterminate clock runs under reduced motion. | Pending. |
-| core | Clicks on slotted content inside an opening did not reach page listeners. | Pending. |
-| rs-navbar | Private core members. | Fixed (see table). |
-| rs-tabs, rs-accordion | Two presses within about 0.5 s swap the panel without the shutter closing. | Pending. |
+| Component | Bug | Fix | Test |
+|---|---|---|---|
+| rs-toast | `<rs-toast open>` was built with the latch set and no pulse in the timer line, so it never closed. | Built shut; the element sets `open = true` once when first mounted, the same player action as `show()`. An alert is still built open. | `test/ui/toast.test.js` |
+| rs-toast | An old timer pulse closes a toast that was dismissed early and shown again within `duration`. | **Not fixed.** A repeater line cannot cancel a pulse in flight; the fix is a counter of pulses in flight (a dropper pair read by a comparator that gates the reset piston), a larger machine. Documented in the entry notes. | |
+| rs-modal, rs-popover | Open and close 1 to 4 ticks apart did not let the later press win (torch NOR latch with a 1- and a 4-tick loop). | The latch is now rs-radio's D latch of locked repeaters: the later press always wins; in the same tick, close wins. Door clear 5 ticks after open (was 3), home 1 tick after close. One column and one row larger. | modal entry, every offset -16 to 16 |
+| rs-progress | Indeterminate kept its clock running under reduced motion. | A pause lever on top of S1 holds the clock still with the bar dark; the element builds and sets it so under reduced motion. One row taller. | progress entry and `test/ui/progress.test.js` |
+| core | Clicks on slotted content inside an opening did not reach page listeners. | `clickStaysInside()` lets clicks inside a `.window` through. | `test/ui/core.test.js`, browser smoke |
+| rs-navbar | Used private core members (`_ctl`, `_activate`, `_box`, `_stage`, `_awake`). | `el.contraption`, `el.perform`, the open shadow root, and a `sync` hook for restocking. | `test/ui/navbar.test.js`, rules audit |
+| rs-tabs, rs-accordion | Two presses within about 0.5 s swapped the panel without the shutter closing. | The shutter comparator's rear is a redstone block: the shutter stays shut while any button is in, and is clear 4 ticks after the last comes out (14 ticks for one press, was 7). | tabs entry, second press 1 to 12 ticks later |
 
 ## Export review
 

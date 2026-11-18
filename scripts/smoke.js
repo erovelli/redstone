@@ -413,6 +413,7 @@ async function main() {
     await page.keyboard.press('s');
     check('typing opens the list on the matching option', await until(page, s => document.querySelector(s).open === true, size) &&
       await page.$eval(size, el => el.shadowRoot.querySelector('.hit').ariaActiveDescendantElement === el.children[0]));
+    await until(page, s => !document.querySelector(s).contraption.io.button.on, size);
     await page.keyboard.press('Escape');
     check('Escape closes it unchosen', await until(page, s => document.querySelector(s).open === false, size) && await page.$eval(size, el => el.value === 'l'));
     // Mouse: the combobox, then an option in the list.
