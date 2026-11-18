@@ -96,6 +96,16 @@ module.exports = {
       const spec = { params: { open: { attr: 'open', type: 'boolean' }, rows: 'length' }, state: { open: { attr: 'open', set() {} } } };
       return ui.sameParams(spec, { rows: 3, open: true }, { open: false, rows: 3 }) && !ui.sameParams(spec, { rows: 4, open: false }, { rows: 3, open: false });
     }),
+    T('clickStaysInside: machine clicks stay in the element; clicks on content through an opening reach the page', () => {
+      const root = { id: 'root' }, page = { id: 'page' };
+      const node = (cls, r) => ({ classList: { contains: c => cls.split(' ').includes(c) }, getRootNode: () => r });
+      const box = node('box rs-own', root), stage = node('stage', root), win = node('window', root), slot = node('', root);
+      const link = node('rs-own window', page);                     // page classes on slotted content do not count
+      return ui.clickStaysInside([node('', root), stage, box], root) === true &&
+        ui.clickStaysInside([link, slot, win, box], root) === false &&
+        ui.clickStaysInside([node('hit', root), node('controls', root), box], root) === true &&
+        ui.clickStaysInside([node('caption', root)], root) === false;
+    }),
     T('testing.strictWorld: rejects legacy blocks and wiring links', () => {
       const w = new RS.World();
       w.put(0, 0, 0, 'stone');

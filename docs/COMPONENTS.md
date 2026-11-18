@@ -160,7 +160,7 @@ Shadow root and canvas; building and settling the contraption; one shared 100 ms
 
 An overlay that is not a control (a drag along a lamp bar, a native `<input>` over a sign) performs its player actions with `el.perform((hand, io, built) => ..., { event, settle })`: the same path as a control's `act` (`disabled`, reduced motion, waking the world); `settle: true` also settles the world and applies the state before it returns, so the element's events fire at once.
 
-Raw pointer clicks on the machine never reach page listeners in the bubble phase; the element's own events come from its output. (Capture-phase listeners above the element still see the raw click; that cannot be prevented.) `el.click()` and a click on a `<label for>` operate the primary control.
+Raw pointer clicks on the machine (the canvas, the controls, sign text) never reach page listeners in the bubble phase; the element's own events come from its output. Clicks on slotted content shown through an opening are ordinary DOM clicks: they bubble to the page like any other (`Redstone.ui.clickStaysInside(path, root)` is the rule). (Capture-phase listeners above the element still see the raw click; that cannot be prevented.) `el.click()` and a click on a `<label for>` operate the primary control.
 
 ## 3. Accessibility checklist
 

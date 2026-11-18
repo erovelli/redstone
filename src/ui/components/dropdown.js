@@ -167,7 +167,7 @@ Redstone.ui.define('rs-dropdown', {
     const m = mine(el);
     if (m.wired) return;
     m.wired = true;
-    // Capture: the core keeps raw clicks on the machine (and the opening) inside the shadow root.
+    // Capture, so the choice is seen before page listeners (clicks on items reach the page as normal clicks).
     el.addEventListener('click', ev => {
       const item = ev.target.closest && items(el).find(n => n.contains(ev.target));
       if (item) choose(el, item);

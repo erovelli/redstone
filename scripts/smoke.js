@@ -402,6 +402,8 @@ async function main() {
     await events(page);
     await page.keyboard.press('ArrowDown');
     check('ArrowDown moves the active option without a player action', await page.$eval(size, el => el.shadowRoot.querySelector('.hit').ariaActiveDescendantElement === el.children[2] && el.value === 'm'));
+    // A player waits for the menu button to come out (10 ticks): a page turn while it is in has its pulse lost.
+    await until(page, s => !document.querySelector(s).contraption.io.button.on, size);
     await page.keyboard.press('Enter');
     check('Enter turns the page: value follows the comparator', await until(page, s => document.querySelector(s).value === 'l', size));
     check('and the pulse closes the list', await until(page, s => document.querySelector(s).open === false && !document.querySelector(s).hasAttribute('data-deployed'), size));
@@ -416,6 +418,12 @@ async function main() {
     // Mouse: the combobox, then an option in the list.
     await page.locator(hit(ore)).click();
     check('a click opens the list', await until(page, s => document.querySelector(s).open === true, ore));
+    check('a press while the button is still in does nothing: the list stays open', await page.$eval(ore, el => {
+      if (!el.contraption.io.button.on) return true;     // too slow to catch it in: nothing to check
+      el.shadowRoot.querySelector('.hit').click();
+      return el.contraption.io.bulb.lit;
+    }));
+    await until(page, s => !document.querySelector(s).contraption.io.button.on, ore);
     await page.locator(ore + ' option:nth-of-type(4)').click();
     check('clicking an option chooses it', await until(page, s => document.querySelector(s).value === 'Copper' && !document.querySelector(s).open, ore));
     check('valid once chosen; FormData has it', await page.$eval(ore, el => el.checkValidity() && new FormData(el.form).get('ore') === 'Copper'));
@@ -483,6 +491,30 @@ async function main() {
       new Promise(r => setTimeout(() => r(false), 4000)),
     ]);
     check('a MutationObserver on the page does not make sign labels loop', alive === true);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
+  console.log('\ncore: clicks on content shown through an opening');
+  {
+    const { page, errors } = await open(browser);
+    await page.evaluate(() => {
+      const c = document.createElement('rs-collapse');
+      c.id = 'click-through';
+      c.setAttribute('summary', 'Clicks');
+      c.setAttribute('open', '');
+      c.innerHTML = '<button type="button" id="inside-opening">Inside</button>';
+      document.body.prepend(c);
+    });
+    await page.locator('#inside-opening').scrollIntoViewIfNeeded();
+    await until(page, () => document.querySelector('#click-through').open === true);
+    await events(page);
+    await page.locator('#inside-opening').click();
+    const ev = await events(page);
+    check('a click on slotted content inside an opening reaches page listeners like a normal DOM click', ev.some(e => e.type === 'click' && e.tag === 'button' && e.name === 'Inside'), ev);
+    await page.$eval('#click-through', el => el.shadowRoot.querySelector('.hit').click());
+    await page.waitForTimeout(150);
+    check('a click on the machine itself still stays inside the element', !(await events(page)).some(e => e.type === 'click' && e.tag !== 'button'));
     check('no console errors', errors.length === 0, errors);
     await page.close();
   }

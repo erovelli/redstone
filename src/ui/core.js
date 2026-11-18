@@ -236,8 +236,21 @@ function signsFor(text, opts = {}) {
   return Math.max(min, Math.min(max, Math.ceil(width + 0.25)));   // a little margin at each end
 }
 
+// Whether a raw click stays inside the element. Clicks on the machine (the stage, the controls, the sign text) do:
+// a component's own events come from its output. Clicks on slotted content shown through an opening (inside a
+// .window) are ordinary DOM clicks and reach the page. `path` is ev.composedPath(); only nodes of the element's
+// own shadow root count, so page classes on slotted content cannot match.
+function clickStaysInside(path, root) {
+  for (const n of path) {
+    if (!n || !n.classList || (root && (!n.getRootNode || n.getRootNode() !== root))) continue;
+    if (n.classList.contains('window')) return false;
+    if (n.classList.contains('rs-own')) return true;
+  }
+  return false;
+}
+
 const ui = {
-  compat, coerce, paramsFor, paramAttributes, sameParams, diffState, Controller, testing, signsFor,
+  compat, coerce, paramsFor, paramAttributes, sameParams, diffState, Controller, testing, signsFor, clickStaysInside,
   registry: new Map(),
 };
 
@@ -554,7 +567,7 @@ class RedstoneElement extends HTMLElement {
     // Raw clicks on the machine itself stay inside; clicks on content shown through an opening do not.
     root.addEventListener('click', ev => {
       if (SYNTHETIC.has(ev)) return;
-      if (ev.composedPath().some(n => n.classList && n.classList.contains('rs-own'))) ev.stopPropagation();
+      if (clickStaysInside(ev.composedPath(), root)) ev.stopPropagation();
     });
     root.addEventListener('slotchange', () => {
       this._syncNames();
