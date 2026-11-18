@@ -2,6 +2,8 @@
 // reads the fill and lights that many lamps. Without a value a torch clock runs a band of light along the lamps.
 //
 //   <rs-progress value="7" max="15">Upload</rs-progress>   <rs-progress>Loading</rs-progress>
+const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 Redstone.ui.define('rs-progress', {
   entry: 'ui-progress',
 
@@ -9,6 +11,8 @@ Redstone.ui.define('rs-progress', {
     steps: 'steps',
     max: { attr: 'max', type: 'number', doc: 'The value of a full bar (default 100). Changing it rebuilds the bar.' },
     value: { attr: 'value', type: 'number', doc: 'Read when the bar is built; after that the attribute mirrors the bar.' },
+    // Reduced motion: an indeterminate bar is built with its pause lever on (steady, like rs-spinner's still ring).
+    paused: () => reducedMotion(),
   },
 
   label: 'beside',
@@ -38,16 +42,18 @@ Redstone.ui.define('rs-progress', {
       set: (hand, io, value, built) => {
         const v = value === null || value === undefined || value === '' ? NaN : Number(value);
         if (!Number.isFinite(v)) {
-          // Indeterminate: empty the barrel and let the clock run.
+          // Indeterminate: empty the barrel and let the clock run (held still by the pause lever under reduced motion).
           hand.fill(io.barrel, 0);
+          if (!!io.pause.on !== reducedMotion()) hand.flip(io.pause);
           if (io.lever.on) hand.flip(io.lever);
           return;
         }
         const level = Math.max(0, Math.min(built.steps, Math.round((built.steps * v) / built.max)));
         hand.fill(io.barrel, level);
         if (!io.lever.on) hand.flip(io.lever);
+        if (io.pause.on) hand.flip(io.pause);
       },
-      doc: 'The bar, as a number from 0 to max, snapped to max / steps. Setting it fills the barrel; null (or removing the attribute) starts the clock.',
+      doc: 'The bar, as a number from 0 to max, snapped to max / steps. Setting it fills the barrel; null (or removing the attribute) starts the clock, or under reduced motion holds it still with the pause lever.',
     },
   },
 

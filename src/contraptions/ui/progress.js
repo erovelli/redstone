@@ -10,6 +10,8 @@
 //     z=-1 floor ------------------------------------      floor -------------------
 //   The clock: torch -> S1 (the block above it) -> repeater R0 -> X -> the dust under X -> A, the torch's block.
 //   The lever on X keeps X powered, so A stays powered and the torch stays off.
+//   The pause lever on top of S1 (z = 2) holds S1 powered, so R0, X and A stay powered and the torch stays off:
+//   the clock stands still with the bar dark while the bar is still indeterminate (reduced motion).
 (function () {
 const N = typeof module !== 'undefined';
 const RS = N ? require('../../engine.js') : window.RS;
@@ -38,6 +40,7 @@ function buildProgress(p = {}) {
   const max = num(p.max) > 0 ? num(p.max) : 100;
   const level = levelFor(p.value, max, steps);
   const running = level === null;          // no value: indeterminate, the clock runs
+  const paused = running && (p.paused === true || p.paused === 'true');   // indeterminate, clock held still
   const w = new RS.World({ strict: true });
   const L0 = 4;                             // the first lamp's column; the dust starts one block earlier
   const xEnd = L0 + steps - 1;
@@ -67,11 +70,12 @@ function buildProgress(p = {}) {
   // Back row: the clock and its stop lever.
   const X = w.put(0, -1, 1, 'stone');
   const lever = w.put(0, 0, 1, 'lever', { att: 'N', on: !running });
-  w.put(0, -1, 0, 'dust', { lvl: running ? 0 : 15 });
+  w.put(0, -1, 0, 'dust', { lvl: running && !paused ? 0 : 15 });
   w.put(1, -1, 0, 'stone');                                   // A: the torch's block
-  const r0 = w.put(1, -1, 1, 'repeater', { d: 'W', delay: CLOCK_DELAY, on: false });
+  const r0 = w.put(1, -1, 1, 'repeater', { d: 'W', delay: CLOCK_DELAY, on: paused });
   const torch = w.put(2, -1, 0, 'torch', { att: 'W', lit: false });
   w.put(2, -1, 1, 'stone');                                   // S1: powered by the torch below it
+  const pause = w.put(2, -1, 2, 'lever', { att: 'D', on: paused });   // on S1: holds the clock still
   // The chase chain: a repeater behind every odd lamp, a block behind every even one.
   const chain = [];
   for (let x = 3; x <= xEnd; x++) {
@@ -81,9 +85,9 @@ function buildProgress(p = {}) {
   w.seal();
   return {
     world: w,
-    box: [0, xEnd, -1, 0, -1, 1],
+    box: [0, xEnd, -1, 0, -1, 2],
     steps, max,
-    io: { lever, barrel, comparator, lamps, dust, torch, clock: r0, chain, stop: X },
+    io: { lever, pause, barrel, comparator, lamps, dust, torch, clock: r0, chain, stop: X },
   };
 }
 
@@ -98,9 +102,9 @@ const entry = Catalogue.register({
   summary: 'A comparator reads how full a barrel is and a dust line on top of a row of lamps carries that strength: one lamp per level. Without a value a torch clock behind the lamps sends a band of light along a repeater chain.',
   strict: true,
   deviations: [],
-  inputs: ['items in the barrel', 'the clock lever'],
+  inputs: ['items in the barrel', 'the clock lever', 'the pause lever'],
   outputs: ['comparator strength (lamps lit)', 'the chase (clock running)'],
-  actions: ['put items into or take them out of the barrel', 'flip the lever'],
+  actions: ['put items into or take them out of the barrel', 'flip the clock lever', 'flip the pause lever'],
   timing: 'The comparator follows the barrel within 2 ticks of a change; the last lamp lights in the same tick and goes dark within 2 more. The chase runs at 2 ticks per lamp pair; the clock period is 8 ticks.',
   notes: [
     'Resolution: value / max is rounded to the nearest of `steps` lamps (5 to 15, default 10). The comparator level is that lamp count, so a step is max / steps.',
@@ -108,6 +112,7 @@ const entry = Catalogue.register({
     'The chase lights every second lamp, starting with the first: the lamps in front of the chain blocks, which the repeaters strongly power.',
     'The torch is off for 4 ticks of every 8, well inside the burnout limit (8 turn-offs in 30 ticks).',
     'The element builds with { value, max } from its attributes (no value: the clock runs) and then sets the value with the hand.',
+    'Reduced motion: an indeterminate bar is built with { paused: true } (and set so with the hand): the pause lever on top of S1 holds the clock still with every lamp dark, a steady state, like rs-spinner\'s still ring. The bar stays indeterminate: the clock lever is off.',
   ],
   params: [
     { key: 'steps', label: 'Lamps', min: 5, max: 15, def: 10 },
@@ -115,6 +120,7 @@ const entry = Catalogue.register({
   controls: [
     { kind: 'action', label: 'Fill the barrel by one level', fn: built => built.world.hand.fill(built.io.barrel, Math.min(15, (built.io.barrel.fill || 0) + 1)) },
     { kind: 'lever', io: 'lever', label: 'Clock stop lever' },
+    { kind: 'lever', io: 'pause', label: 'Pause lever' },
   ],
   build: buildProgress,
   tests: [
@@ -181,6 +187,18 @@ const entry = Catalogue.register({
       hand.flip(c.io.lever);
       t.settle(w);
       return t.hash(w) === h0;
+    })),
+    T('paused (reduced motion): built indeterminate and still, steady, all dark; the pause lever starts and stops the clock', () => each(entry, p => {
+      const t = ui().testing, c = buildProgress(Object.assign({}, p, { paused: true })), w = c.world, hand = t.hand(w);
+      w.assertSteady(100);
+      if (litCount(c.io) !== 0 || c.io.lever.on || !c.io.pause.on) return false;
+      hand.flip(c.io.pause);
+      w.run(40);
+      const runs = !w.quiet;
+      hand.flip(c.io.pause);
+      t.settle(w);
+      const h = t.hash(w);
+      return runs && litCount(c.io) === 0 && h === t.hash(buildProgress(Object.assign({}, p, { paused: true })).world);
     })),
     T('strict, and no pistons', () => each(entry, p => ui().testing.strictWorld(buildProgress(p).world, RS) && ui().testing.pistonCount(buildProgress(p).world) === 0)),
   ],
