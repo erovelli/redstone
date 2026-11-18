@@ -1,0 +1,2 @@
+/* rs-pagination: reserve the machine's box before the element upgrades; any light-DOM links show as a row. */
+rs-pagination:not(:defined) { display: flex; flex-wrap: wrap; gap: .3em .8em; align-items: center; min-height: calc(var(--rs-block, 24px) * 4); }

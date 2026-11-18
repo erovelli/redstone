@@ -1,0 +1,4 @@
+/* rs-accordion: before the element upgrades (or without the script) the items are ordinary <details>.
+   Upgraded, each summary is on the header signs, so the body shows through the opening without it. */
+rs-accordion { display: block; }
+rs-accordion:defined > details > summary { display: none; }

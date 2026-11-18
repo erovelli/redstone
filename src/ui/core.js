@@ -758,14 +758,16 @@ class RedstoneElement extends HTMLElement {
   }
   // A radio group's arrow keys: focus the next (or previous) visible control and operate it, wrapping around.
   // Auto-repeat is ignored: it would press a button every 30 ms.
+  // Home and End go to the first and last control (tabs).
   _rove(ev, i) {
     const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[ev.key];
-    if (!step) return;
+    const edge = { Home: 0, End: -1 }[ev.key];
+    if (!step && edge === undefined) return;
     ev.preventDefault();
     if (ev.repeat) return;
     const live = this._controls.filter(c => !c.btn.hidden);
     const at = live.findIndex(c => c.i === i);
-    const next = live[(at + step + live.length) % live.length];
+    const next = step ? live[(at + step + live.length) % live.length] : live[edge < 0 ? live.length - 1 : 0];
     if (!next || next.i === i) return;
     next.btn.focus();
     this._activate(next.spec, null, ev);

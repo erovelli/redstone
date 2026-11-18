@@ -753,6 +753,160 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-tabs');
+  {
+    const { page, errors } = await open(browser);
+    const tabs = 'rs-tabs';
+    await page.evaluate(() => document.querySelector('rs-tabs').addEventListener('change', ev => window.__events.push({ type: 'tabs-change', value: ev.detail.value })));
+    await page.locator(tabs).scrollIntoViewIfNeeded();
+    const hits = tabs + ' >> .hit';
+    check('tabs: starts on the panel marked selected; three tabs in a tablist, aria-selected on it', await page.$eval(tabs, el => {
+      const b = [...el.shadowRoot.querySelectorAll('.hit')].filter(h => !h.hidden);
+      return el.value === 'Reviews' && el.selected === 1 && b.length === 3 && b.every(h => h.getAttribute('role') === 'tab') &&
+        b[1].getAttribute('aria-selected') === 'true' && b[0].getAttribute('aria-selected') === 'false' &&
+        el.shadowRoot.querySelector('.controls').getAttribute('role') === 'tablist' && b[2].getAttribute('aria-label') === 'Ship';
+    }));
+    check('tabs: only the selected panel is rendered, as a named tabpanel', await page.$eval(tabs, el => {
+      const p = [...el.children];
+      return p[1].getBoundingClientRect().height > 0 && p[0].getBoundingClientRect().height === 0 && p[1].getAttribute('role') === 'tabpanel' && p[1].getAttribute('aria-label') === 'Reviews';
+    }));
+    const same = await page.$eval(tabs, el => { el.shadowRoot.querySelectorAll('.hit')[2].click(); return el.value; });
+    check('tabs: a click does not change value directly', same === 'Reviews');
+    check('tabs: the shutter closes before the panel changes', await until(page, s => !document.querySelector(s).contraption.state.shown1 && document.querySelector(s).value === 'Reviews', tabs));
+    check('tabs: value follows the shutter clearing on the new panel', await until(page, s => document.querySelector(s).value === 'Ship', tabs));
+    let ev = await events(page);
+    check('tabs: one change event, with the new value', ev.filter(e => e.type === 'tabs-change').length === 1 && ev.find(e => e.type === 'tabs-change').value === 'Ship', ev);
+    // Keyboard: arrows, Home and End move focus and choose as they go.
+    await page.waitForTimeout(1100);
+    await page.locator(hits).nth(2).focus();
+    await page.keyboard.press('ArrowUp');
+    check('tabs: ArrowUp chooses the previous tab', await until(page, s => document.querySelector(s).value === 'Reviews', tabs));
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('Home');
+    check('tabs: Home chooses the first tab and focus follows', await until(page, s => document.querySelector(s).value === 'Specs', tabs) &&
+      await page.$eval(tabs, el => el.shadowRoot.activeElement === el.shadowRoot.querySelectorAll('.hit')[0]));
+    await page.waitForTimeout(1100);
+    await page.keyboard.press('End');
+    check('tabs: End chooses the last tab', await until(page, s => document.querySelector(s).value === 'Ship', tabs));
+    check('tabs: roving tab stop on the selected tab', await page.$eval(tabs, el => [...el.shadowRoot.querySelectorAll('.hit')].map(b => b.tabIndex).slice(0, 3).join() === '-1,-1,0'));
+    check('tabs: el.value = "Specs" settles at once', await page.$eval(tabs, el => { el.value = 'Specs'; return el.value === 'Specs' && el.selected === 0 && el.contraption.state.shown0; }));
+    await page.$eval(tabs, el => el.setAttribute('disabled', ''));
+    await page.$eval(tabs, el => el.shadowRoot.querySelectorAll('.hit')[1].click());
+    await page.waitForTimeout(900);
+    check('tabs: disabled: no presses', await page.$eval(tabs, el => el.value === 'Specs' && !el.contraption.io.buttons.some(b => b.on)));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+  {
+    const { page, errors } = await open(browser, { reducedMotion: 'reduce' });
+    await page.locator('rs-tabs').scrollIntoViewIfNeeded();
+    const r = await page.$eval('rs-tabs', el => { el.shadowRoot.querySelectorAll('.hit')[0].click(); return el.value; });
+    check('tabs, reduced motion: a click settles at once', r === 'Specs', r);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
+  console.log('\nrs-accordion');
+  {
+    const { page, errors } = await open(browser);
+    const acc = 'rs-accordion';
+    await page.evaluate(() => {
+      const el = document.querySelector('rs-accordion');
+      el.addEventListener('change', ev => window.__events.push({ type: 'acc-change', value: ev.detail.value }));
+      [...el.children].forEach((d, k) => d.addEventListener('toggle', () => window.__events.push({ type: 'details-toggle', k, open: d.open })));
+    });
+    await page.locator(acc).scrollIntoViewIfNeeded();
+    const state = () => page.$eval(acc, el => ({ open: el.open, value: el.value, details: [...el.children].map(d => d.open).join() }));
+    check('accordion: starts with the details marked open; headers have aria-expanded; a close-all control', await page.$eval(acc, el => {
+      const b = [...el.shadowRoot.querySelectorAll('.hit')].filter(h => !h.hidden);
+      return el.open === 1 && el.value === 'Returns' && b.length === 4 && b[1].getAttribute('aria-expanded') === 'true' && b[0].getAttribute('aria-expanded') === 'false' &&
+        b[0].getAttribute('aria-label') === 'Shipping' && b[3].getAttribute('aria-label') === 'Close all';
+    }));
+    await page.locator(acc + ' >> .hit').nth(0).click();
+    check('accordion: a header click opens its item when the opening clears, and closes the other', await until(page, s => document.querySelector(s).open === 0, acc));
+    const s0 = await state();
+    check('accordion: each details mirrors it', s0.details === 'true,false,false', s0);
+    await page.waitForTimeout(300);
+    let ev = await events(page);
+    check('accordion: one change; native toggle on both details', ev.filter(e => e.type === 'acc-change').length === 1 && ev.filter(e => e.type === 'details-toggle').length === 2, ev);
+    await page.waitForTimeout(1100);
+    await page.locator(acc + ' >> .hit').nth(0).focus();
+    await page.keyboard.press('Enter');
+    check('accordion: Enter on the open header closes it (the none button)', await until(page, s => document.querySelector(s).open === -1, acc) &&
+      await page.$eval(acc, el => el.contraption.io.none.on || el.contraption.state.value === ''));
+    check('accordion: no body shown, every details closed', await page.$eval(acc, el => [...el.children].every(d => !d.open) && el.shadowRoot.querySelectorAll('.window:not([hidden])').length === 0));
+    await page.waitForTimeout(1100);
+    await page.$eval(acc, el => { el.children[2].open = true; });
+    check('accordion: page code opening a details presses its button', await until(page, s => document.querySelector(s).open === 2, acc));
+    check('accordion: el.value = "Shipping" settles at once', await page.$eval(acc, el => { el.value = 'Shipping'; return el.open === 0 && el.children[0].open && !el.children[2].open; }));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
+  console.log('\nrs-steps');
+  {
+    const { page, errors } = await open(browser);
+    const tl = 'rs-steps:not([manual])', man = 'rs-steps[manual]';
+    await page.evaluate(() => document.querySelectorAll('rs-steps').forEach((el, i) => el.addEventListener('change', ev => window.__events.push({ type: 'steps-change', i, value: ev.detail.value }))));
+    await page.locator(tl).scrollIntoViewIfNeeded();
+    check('steps: a progressbar at 0 of 4; the lever is a switch', await page.$eval(tl, el => el._internals.role === 'progressbar' && el._internals.ariaValueNow === '0' && el._internals.ariaValueMax === '4' &&
+      [...el.shadowRoot.querySelectorAll('.hit')].filter(b => !b.hidden).map(b => b.getAttribute('role')).join() === 'switch'));
+    await page.locator(tl + ' >> .hit').first().focus();
+    await page.keyboard.press('Space');
+    check('steps: the lever runs the timeline to the last step', await until(page, s => document.querySelector(s).value === 4, tl));
+    let ev = (await events(page)).filter(e => e.type === 'steps-change' && e.i === 0);
+    check('steps: one change per lamp, in order', ev.map(e => e.value).join() === '1,2,3,4', ev);
+    check('steps: aria-current="step" on the last step reached', await page.$eval(tl, el => el.children[3].getAttribute('aria-current') === 'step' && !el.children[2].hasAttribute('aria-current')));
+    check('steps, manual: starts at step 1 with a next and a previous control', await page.$eval(man, el => el.value === 1 && el.children[0].getAttribute('aria-current') === 'step' &&
+      [...el.shadowRoot.querySelectorAll('.hit')].filter(b => !b.hidden).map(b => b.getAttribute('aria-label')).join() === 'Next step,Previous step'));
+    await page.locator(man + ' >> .hit').nth(1).click();
+    check('steps, manual: next lights the next lamp', await until(page, s => document.querySelector(s).value === 2, man));
+    await page.$eval(man, el => el.previous());
+    check('steps, manual: previous() takes a book back', await until(page, s => document.querySelector(s).value === 1, man));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
+  console.log('\nrs-pagination');
+  {
+    const { page, errors } = await open(browser);
+    const pg = 'rs-pagination';
+    await page.evaluate(() => document.querySelector('rs-pagination').addEventListener('change', ev => window.__events.push({ type: 'page-change', value: ev.detail.value })));
+    await page.locator(pg).scrollIntoViewIfNeeded();
+    check('pagination: a named navigation landmark on page 3 of 7, page 3 marked current', await page.$eval(pg, el => {
+      const b = [...el.shadowRoot.querySelectorAll('.hit')].filter(h => !h.hidden);
+      return el.page === 3 && el._internals.role === 'navigation' && b.length === 9 && b[4].getAttribute('aria-current') === 'page' && b[1].getAttribute('aria-label') === 'Next page';
+    }));
+    const same = await page.$eval(pg, el => { el.shadowRoot.querySelectorAll('.hit')[1].click(); return el.page; });
+    check('pagination: a click does not change page directly', same === 3);
+    check('pagination: page follows the comparator', await until(page, s => document.querySelector(s).page === 4, pg));
+    await page.locator(pg + ' >> .hit').nth(1).focus();
+    await page.keyboard.press('Home');
+    check('pagination: Home turns to the first page', await until(page, s => document.querySelector(s).page === 1, pg));
+    await page.locator(pg + ' >> .hit').nth(8).click();
+    check('pagination: a page control turns straight to its page', await until(page, s => document.querySelector(s).page === 7, pg));
+    const ev = (await events(page)).filter(e => e.type === 'page-change');
+    check('pagination: one change per page shown', ev.map(e => e.value).join() === '4,1,7', ev);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
+  console.log('\nrs-breadcrumb');
+  {
+    const { page, errors } = await open(browser);
+    const bc = 'rs-breadcrumb';
+    await page.locator(bc).scrollIntoViewIfNeeded();
+    check('breadcrumb: the signal walks out to the current page on load', await until(page, s => document.querySelector(s).arrived === true, bc));
+    check('breadcrumb: a navigation landmark; the last crumb is aria-current="page"; links sit on the signs', await page.$eval(bc, el => {
+      const a = el.children[0].getBoundingClientRect(), box = el.shadowRoot.querySelector('.box').getBoundingClientRect();
+      return el._internals.role === 'navigation' && el.children[2].getAttribute('aria-current') === 'page' && a.height > 0 && a.top >= box.top && a.bottom <= box.bottom;
+    }));
+    await page.locator(bc + ' a').nth(1).click();
+    check('breadcrumb: the links are ordinary links', await page.evaluate(() => location.hash === '#rs-tabs'));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });
