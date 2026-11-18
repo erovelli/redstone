@@ -1,0 +1,4 @@
+/* rs-steps: before the element upgrades (or without the script) the steps read as a numbered list. */
+rs-steps:not(:defined) { display: block; counter-reset: rs-step; }
+rs-steps:not(:defined) > * { display: block; counter-increment: rs-step; }
+rs-steps:not(:defined) > *::before { content: counter(rs-step) ". "; }

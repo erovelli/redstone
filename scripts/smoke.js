@@ -576,6 +576,30 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-steps');
+  {
+    const { page, errors } = await open(browser);
+    const tl = 'rs-steps:not([manual])', man = 'rs-steps[manual]';
+    await page.evaluate(() => document.querySelectorAll('rs-steps').forEach((el, i) => el.addEventListener('change', ev => window.__events.push({ type: 'steps-change', i, value: ev.detail.value }))));
+    await page.locator(tl).scrollIntoViewIfNeeded();
+    check('steps: a progressbar at 0 of 4; the lever is a switch', await page.$eval(tl, el => el._internals.role === 'progressbar' && el._internals.ariaValueNow === '0' && el._internals.ariaValueMax === '4' &&
+      [...el.shadowRoot.querySelectorAll('.hit')].filter(b => !b.hidden).map(b => b.getAttribute('role')).join() === 'switch'));
+    await page.locator(tl + ' >> .hit').first().focus();
+    await page.keyboard.press('Space');
+    check('steps: the lever runs the timeline to the last step', await until(page, s => document.querySelector(s).value === 4, tl));
+    let ev = (await events(page)).filter(e => e.type === 'steps-change' && e.i === 0);
+    check('steps: one change per lamp, in order', ev.map(e => e.value).join() === '1,2,3,4', ev);
+    check('steps: aria-current="step" on the last step reached', await page.$eval(tl, el => el.children[3].getAttribute('aria-current') === 'step' && !el.children[2].hasAttribute('aria-current')));
+    check('steps, manual: starts at step 1 with a next and a previous control', await page.$eval(man, el => el.value === 1 && el.children[0].getAttribute('aria-current') === 'step' &&
+      [...el.shadowRoot.querySelectorAll('.hit')].filter(b => !b.hidden).map(b => b.getAttribute('aria-label')).join() === 'Next step,Previous step'));
+    await page.locator(man + ' >> .hit').nth(1).click();
+    check('steps, manual: next lights the next lamp', await until(page, s => document.querySelector(s).value === 2, man));
+    await page.$eval(man, el => el.previous());
+    check('steps, manual: previous() takes a book back', await until(page, s => document.querySelector(s).value === 1, man));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });
