@@ -24,7 +24,7 @@ const compat = {
   quiet: world => !!world.quiet,
   hash: world => world.hash(),
   on: (world, type, fn) => world.on(type, fn),
-  isRealBlock: (RS, type) => !!RS.blocks[type] && !RS.blocks[type].fake,
+  isRealBlock: (RS, type) => !!RS.blocks[type],
   rectOf: (view, at, face = 'front') => view.rectOf(at, face),
   setInspect: (view, on) => view.setInspect(on),
   markTick: () => { const R = RSR(); if (R) R.markTick(); },
@@ -209,13 +209,12 @@ const testing = {
     }
     return true;
   },
-  // R1 and R2 as far as a test can see them: real blocks only, no wiring links, nothing hidden by fiat.
+  // R1 and R6 as far as a test can see them: registered (vanilla) blocks only, nothing hidden by fiat.
   strictWorld(world, RS) {
     for (const b of world.c.values()) {
       if (!compat.isRealBlock(RS, b.t)) throw new Error(`not a real block: ${b.t} at ${b.x},${b.y},${b.z}`);
       if (b.buried || b.feed) throw new Error(`hidden or feed flag on ${b.t} at ${b.x},${b.y},${b.z}`);
     }
-    if (world.floor && world.floor.length) throw new Error('world.floor wiring links are not allowed');
     return true;
   },
   // Push limit by construction: every piston's possible structure is within 12 blocks.
@@ -243,8 +242,21 @@ function signsFor(text, opts = {}) {
   return Math.max(min, Math.min(max, Math.ceil(width + 0.25)));   // a little margin at each end
 }
 
+// Whether a raw click stays inside the element. Clicks on the machine (the stage, the controls, the sign text) do:
+// a component's own events come from its output. Clicks on slotted content shown through an opening (inside a
+// .window) are ordinary DOM clicks and reach the page. `path` is ev.composedPath(); only nodes of the element's
+// own shadow root count, so page classes on slotted content cannot match.
+function clickStaysInside(path, root) {
+  for (const n of path) {
+    if (!n || !n.classList || (root && (!n.getRootNode || n.getRootNode() !== root))) continue;
+    if (n.classList.contains('window')) return false;
+    if (n.classList.contains('rs-own')) return true;
+  }
+  return false;
+}
+
 const ui = {
-  compat, coerce, paramsFor, paramAttributes, sameParams, diffState, Controller, testing, signsFor, SIGN_BLOCK, SIGN_TEXT,
+  compat, coerce, paramsFor, paramAttributes, sameParams, diffState, Controller, testing, signsFor, SIGN_BLOCK, SIGN_TEXT, clickStaysInside,
   registry: new Map(),
 };
 
@@ -572,7 +584,7 @@ class RedstoneElement extends HTMLElement {
     // Raw clicks on the machine itself stay inside; clicks on content shown through an opening do not.
     root.addEventListener('click', ev => {
       if (SYNTHETIC.has(ev)) return;
-      if (ev.composedPath().some(n => n.classList && n.classList.contains('rs-own'))) ev.stopPropagation();
+      if (clickStaysInside(ev.composedPath(), root)) ev.stopPropagation();
     });
     root.addEventListener('slotchange', () => {
       this._syncNames();

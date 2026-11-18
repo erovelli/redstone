@@ -173,7 +173,7 @@ function pageComponent(e){
     if (st.view) R.removeView(st.view);
     stage.innerHTML = '';
     R.setScale(scaleFor(width()));
-    const opt = { onTick: () => { if (st.hold > 0 && --st.hold === 0 && built.io.plate) built.io.plate.on = false; st.sync(); } };
+    const opt = { onTick: () => { if (st.hold > 0 && --st.hold === 0 && built.io.plate) built.world.hand.step(built.io.plate, false); st.sync(); } };
     if (e.depth){ const F = built.F, inWall = b => b.y <= F && b.y >= F-4 && b.t !== 'ground', cut = () => F - st.peel;
       opt.T = Math.max(2, Math.round(R.B * st.tilt/100)); opt.ghost = b => inWall(b) && b.y > cut(); opt.tint = b => inWall(b) && b.y < cut() ? Math.min(.6, (cut()-b.y)*.15) : 0; if (e.plaque) opt.skip = b => b.plaque; }
     const v = st.view = R.makeView(stage, built, opt);
@@ -191,11 +191,11 @@ function pageComponent(e){
     const fns = [];
     for (const c of e.controls){
       const b = built.io && built.io[c.io]; if (!b && c.kind!=='action') continue;
-      if (c.kind==='lever'){ const btn = mk('', () => { b.on = !b.on; built.world.vibrate(b.x,b.y,b.z,'lever'); }); fns.push(() => { btn.textContent = `${c.label}: ${b.on?'on':'off'}`; btn.setAttribute('aria-pressed', b.on); }); hit(b, `${c.label} (click to flip)`, () => btn.click()); }
-      if (c.kind==='button'){ const fire = () => { if (b.on) return; b.on = true; built.world.vibrate(b.x,b.y,b.z,'button'); built.world.at(built.world.t+10, () => { b.on = false; }); }; const btn = mk(c.label, fire); hit(b, c.label, () => btn.click()); }
-      if (c.kind==='plate'){ const fire = () => { b.on = true; st.hold = 30; }; const btn = mk(c.label, fire); hit(b, c.label, () => btn.click()); }
+      if (c.kind==='lever'){ const btn = mk('', () => { built.world.hand.flip(b); }); fns.push(() => { btn.textContent = `${c.label}: ${b.on?'on':'off'}`; btn.setAttribute('aria-pressed', b.on); }); hit(b, `${c.label} (click to flip)`, () => btn.click()); }
+      if (c.kind==='button'){ const fire = () => { built.world.hand.press(b); }; const btn = mk(c.label, fire); hit(b, c.label, () => btn.click()); }
+      if (c.kind==='plate'){ const fire = () => { built.world.hand.step(b, true); st.hold = 30; }; const btn = mk(c.label, fire); hit(b, c.label, () => btn.click()); }
       if (c.kind==='walk'){ const lab = document.createElement('span'); lab.className='muted small';
-        const step = dd => { st.walk = Math.max(1, Math.min(14, st.walk+dd)); built.world.vibrate(b.x+1, b.y+st.walk, 0, 'step'); st.view.walker = { x:b.x+1, y:b.y+st.walk, at:performance.now() }; };
+        const step = dd => { st.walk = Math.max(1, Math.min(14, st.walk+dd)); built.world.hand.vibrate(b.x+1, b.y+st.walk, 0); st.view.walker = { x:b.x+1, y:b.y+st.walk, at:performance.now() }; };
         mk('Step closer', () => step(-1)); mk('Step away', () => step(1)); ctr.appendChild(lab); fns.push(() => { lab.textContent = `visitor ${st.walk} blocks away`; }); }
       if (c.kind==='action') mk(c.label, () => c.fn(built));
       if (c.kind==='repeaters') b.forEach((r,k) => hit(r, `Repeater ${k+1}: tap to change delay`, act(() => { r.delay = r.delay%4+1; })));

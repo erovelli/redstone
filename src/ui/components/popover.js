@@ -17,7 +17,7 @@ const STYLES = `
   .window { padding: .3em .6em; box-sizing: border-box; background: var(--rs-window-bg, #fbf7ea); color: var(--rs-window-ink, #1b120a); }
 `;
 const PAD_EM = 1.2;
-const SIDE = 3, HIGH = 5 + 4 * 0.72;    // machine blocks around the opening (see modal.js)
+const SIDE = 4, HIGH = 4 + 5 * 0.72;    // machine blocks around the opening (see modal.js)
 const own = new WeakMap();
 const mine = el => own.get(el) || own.set(el, {}).get(el);
 let seq = 0;
@@ -80,7 +80,7 @@ function wire(el, t, signal) {
   t.addEventListener('click', ev => {
     ev.preventDefault();
     // The player presses whichever button the latch calls for: close while it is set, open otherwise.
-    el.perform((hand, io) => hand.press(io.tA.lit ? io.show : io.close));
+    el.perform((hand, io) => hand.press(io.latch.on && !io.show.on ? io.show : io.close));
   }, { signal });
   document.addEventListener('pointerdown', ev => {
     const path = ev.composedPath();
@@ -132,7 +132,7 @@ Redstone.ui.define('rs-popover', {
       doc: 'True while the door is clear. Setting it presses the open or the close button; the world then runs.',
     },
     deployed: {
-      read: (io, b) => !!io.show.on || !io.tA.lit || !home(b),
+      read: (io, b) => !!io.show.on || !io.latch.on || !home(b),
       attr: 'data-deployed',
       doc: 'True while the popover is shown: from the open press until the latch is reset and the door is home.',
     },
@@ -168,7 +168,7 @@ Redstone.ui.define('rs-popover', {
   methods: {
     show() { this.perform(press('show')); },
     close() { this.perform(press('close')); },
-    toggle() { this.perform((hand, io) => hand.press(io.tA.lit ? io.show : io.close)); },
+    toggle() { this.perform((hand, io) => hand.press(io.latch.on && !io.show.on ? io.show : io.close)); },
     disconnectedCallback() {
       Redstone.ui.Element.prototype.disconnectedCallback.call(this);
       const m = mine(this);

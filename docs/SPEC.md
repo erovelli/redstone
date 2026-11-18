@@ -22,28 +22,20 @@ Two things make or break the idea:
 - **Rule-true.** Someone who knows redstone should be able to rebuild any component block for block in Minecraft Java 1.21 and see it work the same way. Section 3 defines this precisely and the test suite enforces it.
 - **Immersion.** One texture library, one scale, one camera, no canvas tricks, no invented blocks. Section 4.
 
-## 2. Where we are (audit, start of this work)
+## 2. Where we are
 
-What exists:
+The first audit (the start of this work) found no component layer, a flagship nav bar moved by JavaScript, wiring links (`world.floor`), invented immovable blocks (`wall`, `wallb`, `ground`), ad hoc block properties, missing rules, hand-painted sprites, global state and a Python build. All of that has been replaced. What exists now:
 
 | Piece | State |
 |---|---|
-| Engine (`src/engine.js`) | One 260-line tick engine. Dust, torches, repeaters, comparators, observers, pistons, slime/honey, sculk, items/pearls, water/bubble columns. Works, 96 tests pass. |
-| Renderer (`src/render.js`) | Fixed oblique camera (front + top faces), procedural 16x16 sprites, depth tint, ghosting. |
-| Catalogue (`src/catalogue.js`) | 22 entries: gates, latches, clocks, comparators, sculk latch, plate reveal, flying machine, split door, 2x2 doors, hidden plaque, pearl launcher. |
-| Site (`pages/`) | A workbench for the catalogue. Its nav bar (pearl launcher) and theme switch (lever and lamp) are the only two places a contraption acts as UI, and both are hand-wired page code. |
+| Engine (`src/engine.js`) | A block registry with vanilla push classes and conductivity, strict sealed worlds, `world.hand` as the only way to act on them, the rulebook below (quasi-connectivity, locking and stretching repeaters, torch burnout, containers, droppers, hoppers, lecterns, bulbs, water and bubble columns, pearls), `assertSteady`, `hash` and `/setblock` export. No invented blocks and no wiring links remain. See `docs/ENGINE.md`. |
+| Renderer and textures | One atlas with vanilla texture names, models for every block, per-view scale, inspect (x-ray) mode. |
+| UI core (`src/ui/core.js`) | The custom-element base: one shared ticker, sleeping, resize, reduced motion, sound, focus and ARIA, forms, openings, controls. See `docs/COMPONENTS.md`. |
+| Components | 32 elements on 31 catalogue entries (section 6). After the rules audit (`docs/AUDIT.md`, `scripts/audit-rules.js`) 29 entries are strict; `ui-navbar` (it ignores presses while a launcher is mid-cycle) and `ui-theme-auto` (the sky light is the environment) declare their deviations. |
+| Workbench catalogue | 16 demo entries (logic gates, latches, clocks, comparators, a sculk latch, a 2x2 piston door), all strict. The flying machine, split door and hidden 2x2 door were removed: rs-drawer, rs-modal and rs-collapse supersede them. |
+| Build and tests | Plain Node: `npm test` (engine, entries, UI suites, the rules audit), `npm run build`, `npm run test:browser` (Playwright). |
 
-What is wrong or missing, in order of importance:
-
-1. **There is no component layer.** Nothing can be dropped into another page. `dist/redstone.js` exposes six globals and the author must build a world, start a timer, create a view and position hit areas by hand. Zero of the usual UI elements exist as components.
-2. **The flagship nav bar is mostly scripted.** In `buildHiddenLauncherNav` the covers, the carriage and the firing redstone blocks are moved by a JavaScript controller calling `world.shift` directly ("standing in for a hidden extender"). The phases are sequenced by JS, not by repeaters. The soul-sand piston is held by a hidden lever through a wiring link. The dispenser is fired by a function call, not by power. Note blocks "play" when JS says so, and they sit in a solid wall (a real note block is silent unless the block above it is air). The water stands in open air with nothing containing it. Hidden helper blocks are flagged `buried` so the renderer skips them.
-3. **Wiring links (`world.floor`).** A feed block teleports strong power to listed cells. Used by the split door, hidden door, hidden plaque and all three launchers. This is not redstone.
-4. **Invented blocks.** `wall`, `wallb` and `ground` are immovable blocks that look like bricks or floor. Real stone bricks move with slime. Several designs only work because of these.
-5. **Block properties are ad hoc whitelists.** `MOVABLE` and `CONDUCT` miss real properties (wool, planks, note blocks, dispensers and soul sand do conduct; glass is movable; glazed terracotta is not modelled; dust, torches and levers in a piston's path block it instead of breaking).
-6. **Missing or simplified rules** that designs rely on: no quasi-connectivity, no dust on slopes, dust does not power the block under it, repeaters do not lock or stretch short pulses, lamps turn off after 1 tick instead of 2, comparators read only barrels, no torch burnout.
-7. **Textures are not a library.** Sprites live inside `cubeArt`/`flatArt` switch statements, and the nav view paints water, buttons, the pearl and note particles with bespoke canvas calls. Levers and trapdoors are drawn inline too. A new block means editing the renderer.
-8. **Global state.** One global block scale (`RSR.setScale`), `window.__T`, a global tick clock, six window globals. Two components at different sizes on one page fight each other.
-9. **Packaging.** Python is needed to build a JavaScript library. No CSS file, no docs page with copy-paste snippets, no license (the README says "Not yet chosen"; that is the owner's call and blocks real reuse).
+Open items: `rs-carousel` was not built; an old rs-toast timer pulse still closes a toast that was dismissed early and shown again within its duration (`docs/AUDIT.md`); the navbar's pearl launch is the design most likely to differ in the game; no license has been chosen.
 
 ## 3. The rules contract
 
@@ -107,9 +99,9 @@ Textures: the bundled atlas is original pixel art that uses **vanilla texture na
 ```
 src/engine.js                 World, block registry, power, pistons, entities, hand, events, export
 src/blocks/*.js               extra block definitions (engine behaviour + model), one block per file, self-registering
-src/contraptions/*.js         legacy builders (pre-strict), kept working
+src/contraptions/*.js         builders for the workbench demos (strict)
 src/contraptions/ui/<name>.js UI contraption: builder(s) + Catalogue.register(entry). Runs in Node and in the browser.
-src/catalogue.js              legacy entries, registry (register, get), generic tests
+src/catalogue.js              workbench entries, registry (register, get), generic tests
 src/index.js                  Node entry: engine, blocks, catalogue, ui contraptions
 src/textures.js               the atlas: named 16x16 textures, pack loader
 src/render.js                 models, views, inspect mode, sprites from the atlas
@@ -141,7 +133,6 @@ RS.defineBlock(type, {
   solid,         // bool: entity collision
   push,          // 'normal' | 'immovable' | 'destroy' | 'push_only'
   sticky,        // 'slime' | 'honey' | undefined
-  fake,          // true only for legacy wall/wallb/ground; strict worlds reject them
   emits(world, b, toward) -> 0..15,      // optional: power source behaviour
   tick(world, b, now),                   // optional: per-tick behaviour
   analog(world, b) -> 0..15,             // optional: comparator reading
@@ -151,7 +142,7 @@ RS.blocks                                 // type -> definition
 
 const w = new RS.World({ strict: true });
 w.put(...)                                // build phase
-w.seal();                                 // strict: from here put/set/shift/floor throw unless the engine or w.hand calls them
+w.seal();                                 // strict: from here put/set/shift throw unless the engine or w.hand calls them
 w.hand.flip(lever) / .press(button) / .step(plate, on) / .vibrate(x,y,z) / .fill(container, n) / .page(lectern, n)
       / .rotate(frame) / .delay(repeater, n) / .mode(comparator, m) / .tune(noteblock, n) / .write(sign, text)
       / .throwPearl(x,y,z, vx,vy,vz) / .use(...)          // R5: the complete list of legal mutations
@@ -197,7 +188,6 @@ State fields are the contract between engine and renderer. `d` is a facing (`N E
 | `sculk` | sculk_sensor | immovable | no | as today |
 | `soulsand`, `magma` | soul_sand, magma_block | normal | yes | |
 | `water` | water | displaced | no | |
-| `wall`, `wallb`, `ground` | none (legacy) | immovable | yes | `fake: true` |
 
 A component that needs a block outside this table adds `src/blocks/<type>.js` with `RS.defineBlock` and, guarded by `typeof window`, its model and textures.
 
@@ -234,20 +224,20 @@ The authoring guide with the exact API is `docs/COMPONENTS.md`.
 
 ## 6. Component list
 
-Mechanism sketches are starting points, not orders. The designer may choose another mechanism if it is rule-true, compact and reads clearly. Keep contraptions small: an inline control should be a handful of blocks.
+Status: every row is built except `rs-carousel`; where the built mechanism differs from the sketch, the row says so ("Built:"), and `docs/AUDIT.md` has the rules audit of each. Mechanism sketches are starting points, not orders. The designer may choose another mechanism if it is rule-true, compact and reads clearly. Keep contraptions small: an inline control should be a handful of blocks.
 
 | Element | Replaces | Player action | Mechanism sketch | Commits when |
 |---|---|---|---|---|
 | **Navigation** | | | | |
-| `rs-navbar` | nav bar | press a button | Ender pearl stasis chamber and slime launcher per link (existing flagship, to be made strict). The pearl should hit a target block; that signal is the navigation. | target block is hit |
+| `rs-navbar` | nav bar | press a button | Ender pearl stasis chamber and slime launcher per link. Built: the element ignores presses until every chamber is refilled (declared; not strict), and navigates when the pearl leaves the viewport rather than on a target block. | pearl has left the viewport |
 | `rs-tabs` | tabs | press a button | Button per tab into a latch bank where setting one resets the others; each latch lights its lamp and opens its panel's cover. | that tab's latch is set and its opening is clear |
-| `rs-breadcrumb` | breadcrumb | none | Signs along a dust and repeater trail; the signal walks out from the root, one repeater per crumb, and stops at the current page. | static |
+| `rs-breadcrumb` | breadcrumb | none | Signs along a dust and repeater trail; the signal walks out from the root, one repeater per crumb, and stops at the current page. Built: built with the root lever on, the trail lit. | static |
 | `rs-pagination` | pagination | turn a lectern page | Lectern with a comparator; signal strength selects the page; a lamp row shows it. | comparator output changes |
 | `rs-steps` | stepper, timeline | flip a lever | Repeater delay line lighting one lamp per step (from `Scenes.timeline`). | each lamp lights |
 | **Disclosure and overlays** | | | | |
 | `rs-collapse`, `rs-accordion` | details/summary, collapsible bullets, accordion | flip a lever (the bullet) | Sticky pistons pull covers off an opening; content shows through it (from the hidden plaque). In an accordion, opening one closes the others through wiring. | opening is clear / closed |
 | `rs-spoiler` | hover or click reveal | stand on a plate | Pressure plate pulls covers down (from `plate-reveal`). | covers are down |
-| `rs-modal` | dialog | press a button | Latch opens a door across the page (flying-machine split door or piston door); the dialog is behind it; the close button resets the latch. | door fully open / closed |
+| `rs-modal` | dialog | press a button | Latch opens a door across the page (flying-machine split door or piston door); the dialog is behind it; the close button resets the latch. Built: a repeater D latch and a honey and slime door, one sticky piston per column. | door fully open / closed |
 | `rs-drawer` | offcanvas | flip a lever | Flying machine carries the panel edge. | machine parked |
 | `rs-tooltip`, `rs-popover` | tooltip, popover | stand on a plate / press a button | A piston pulls a cover away from a sign (signs cannot be pushed). | cover is clear |
 | `rs-dropdown` | dropdown menu | press a button | T flip-flop opens a column of covers over option signs. | covers are clear |
@@ -267,11 +257,11 @@ Mechanism sketches are starting points, not orders. The designer may choose anot
 | `rs-chip`, `rs-badge` | chip, tag, badge | press a button (dismiss) | A sign on a block with a lamp or torch for status. Dismiss: a piston moves the supporting block and the sign pops off. | sign popped |
 | `rs-status` | status dot | none | A torch or lamp driven by an attribute-controlled lever. | lamp changes |
 | **Display** | | | | |
-| `rs-counter` | stat number | (value set by the page) | Seven-segment lamp digits decoded from signal strength. Stretch goal. | lamps settle |
+| `rs-counter` | stat number | (value set by the page) | Seven-segment lamp digits decoded from signal strength. Stretch goal. Built differently: one barrel and comparator per digit lighting a column of lamps (no seven-segment decoding). | lamps settle |
 | `rs-divider` | hr | none | A dust line; optionally a pulse runs along it. | n/a |
 | `rs-card` | card, panel | none | A block frame with a content opening. | n/a |
 | `rs-list` | bulleted list | none | Torch bullets on a block column. | n/a |
-| `rs-carousel` | carousel | press a button | Piston feed tape cycling item blocks. Stretch goal. | tape at rest |
+| `rs-carousel` | carousel | press a button | Piston feed tape cycling item blocks. Stretch goal. **Not built.** | tape at rest |
 
 ## 7. Definition of done for a component
 

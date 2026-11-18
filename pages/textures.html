@@ -73,7 +73,7 @@ h2 { font-size: 14px; margin: 28px 0 8px; border-bottom: 1px solid var(--line); 
   const v = (label, fn, opt = {}) => ({ label, fn, ...opt });
   const one = (type, state = {}) => put => put(0, 0, 0, type, state);
 
-  strip('stone family', ['stone', 'cobblestone', 'bricks', 'smooth_stone', 'iron', 'quartz', 'obsidian', 'bedrock', 'dirt', 'wall', 'wallb', 'ground'].map(t => v(t, one(t))));
+  strip('stone family', ['stone', 'cobblestone', 'bricks', 'smooth_stone', 'iron', 'quartz', 'obsidian', 'bedrock', 'dirt'].map(t => v(t, one(t))));
   strip('functional cubes', ['rblock', 'soulsand', 'magma', 'noteblock', 'jukebox', 'target', 'glass', 'slime', 'honey'].map(t => v(t, one(t))));
   strip('wool', Object.keys(TX.DYES).map(c => v(c, one('wool', { color: c }))));
   strip('concrete', Object.keys(TX.DYES).map(c => v(c, one('concrete', { color: c }))));

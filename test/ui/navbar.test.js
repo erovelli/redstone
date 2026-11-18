@@ -33,6 +33,23 @@ module.exports = {
       for (let t = 0; t < 10; t++) ctl.tick();
       return pearl.vx > 0.5 && pearl.vz > 0.5 && b.links.filter(b.ready).length === 2;
     }),
+    T('a set, empty chamber reads as empty; the element\'s sync hook throws a pearl in through perform (a player action)', () => {
+      const ctl = nav(['Home', 'Docs']), b = ctl.built, L = b.links[0];
+      ctl.hand.press(L.button);
+      for (let t = 0; t < 30; t++) ctl.tick();
+      ctl.settle(400);
+      if (!ctl.state.empty || b.pearlOf(L)) return false;
+      let used = 0;
+      const el = { perform: act => { used++; act(ctl.hand, ctl.io, ctl.built); } };
+      spec.sync(el, ctl.state);
+      ctl.settle(400);
+      spec.sync(el, ctl.state);                       // nothing to do now: no second throw
+      return used === 1 && !ctl.state.empty && b.ready(L) && b.ready(b.links[1]);
+    }),
+    T('uses only the public element surface: contraption, perform and the open shadow root', () => {
+      const src = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'src', 'ui', 'components', 'navbar.js'), 'utf8');
+      return !/\bel\._(ctl|activate|box|stage|view|awake)\b/.test(src) && /el\.perform\(/.test(src) && /el\.contraption/.test(src);
+    }),
     T('launching is read-only; there are no shadow controls (the links themselves are the controls)', () => !spec.state.launching.set && spec.controls.length === 0),
     T('sign text stays legible: the element never shrinks below 30 px blocks', () => spec.minBlock * 0.4 >= 12),
   ],

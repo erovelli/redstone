@@ -1,5 +1,5 @@
-// UI contraption for <rs-popover>: the modal's machine (see modal.js), smaller. An open button on a torch latch
-// puts out the torch that lights the dust line on the piston row, and one sticky piston per column pulls a honey or
+// UI contraption for <rs-popover>: the modal's machine (see modal.js), smaller. The open button resets a repeater
+// latch that lights the dust line on the piston row, and one sticky piston per column pulls a honey or
 // slime column of the door back into the wall; the close button relights it and the door shuts.
 (function () {
 const N = typeof module !== 'undefined';
@@ -20,13 +20,13 @@ const entry = Catalogue.register({
   id: 'ui-popover',
   name: 'Popover',
   category: 'Disclosure and overlays',
-  summary: 'The modal\'s machine, beside its trigger: the open button on a torch latch puts out the torch that lights the piston row, and the pistons pull the honey and slime door back. The close button relights it.',
+  summary: 'The modal\'s machine, beside its trigger: the open button resets the repeater latch that lights the piston row, and the pistons pull the honey and slime door back. The close button relights it.',
   strict: true,
   deviations: [],
   inputs: ['open button', 'close button'],
   outputs: ['door clear', 'door home'],
   actions: ['press the open button', 'press the close button'],
-  timing: 'Door clear 3 ticks after the open press; home 1 tick after the close press; the latch has turned over 7 ticks after it.',
+  timing: 'Door clear 5 ticks after the open press; home 1 tick after the close press; the latch has turned over 5 ticks after it. The later of two presses always wins.',
   notes: [
     'The same latch and door as ui-modal, so the same guarantees: the latch settles for every pair of presses, and each piston moves only its own column.',
   ],
@@ -37,7 +37,7 @@ const entry = Catalogue.register({
   controls: [{ kind: 'button', io: 'show', label: 'Open' }, { kind: 'button', io: 'close', label: 'Close' }],
   build: buildPopover,
   tests: [
-    T('open clears the door on tick 3, close shuts it on tick 1, and a cycle returns every block (every edge)', () => each(entry, p => {
+    T('open clears the door on tick 5, close shuts it on tick 1, and a cycle returns every block (every edge)', () => each(entry, p => {
       const t = ui().testing, M = modal(), c = buildPopover(p), w = c.world, hand = t.hand(w);
       const h0 = t.hash(w);
       hand.press(c.io.show);
@@ -46,7 +46,7 @@ const entry = Catalogue.register({
       hand.press(c.io.close);
       const shut = t.ticksUntil(w, () => M.isHome(c), 20);
       t.settle(w);
-      return opened === 3 && shut === 1 && t.hash(w) === h0;
+      return opened === 5 && shut === 1 && t.hash(w) === h0;
     })),
     T('the built steady state does not drift for 100 ticks, closed and open', () => each(entry, p => [false, true].every(open => ui().testing.noDrift(buildPopover(Object.assign({}, p, { open })).world, 100)))),
     T('push limit: each piston moves exactly its own column, both ways', () => each(entry, p => {

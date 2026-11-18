@@ -48,19 +48,24 @@ module.exports = {
       const ch = ctl.settle();
       return !ctl.state.open && !ch.some(c => c.key === 'value') && ctl.state.value === 'b';
     }),
-    T('a press while the button is still in waits for it (Escape right after opening still closes)', () => {
+    T('a press while the button is still in does nothing, as in the game (no waiting, no skipped time)', () => {
       const ctl = make(['a', 'b'], {});
       toggle(ctl);
+      const t0 = ctl.world.t;
       ctl.tick();
       const again = toggle(ctl);
+      const t1 = ctl.world.t;
       ctl.settle();
-      return again === true && !ctl.state.open && !ctl.io.bulb.lit;
+      return again === false && t1 === t0 + 1 && ctl.state.open && ctl.io.bulb.lit;
     }),
-    T('a choice right after opening waits for the button, so the page turn\'s pulse still closes the list', () => {
+    T('a choice right after opening turns the page, but its pulse is lost in the button\'s power: the list stays open', () => {
       const ctl = make(['a', 'b', 'c'], {});
       toggle(ctl);
       ctl.tick();
       ctl.act({ act: (hand, io, b) => b.choose(hand, 1) });
+      ctl.settle();
+      if (ctl.state.value !== 'b' || !ctl.state.open) return false;
+      ctl.act({ act: (hand, io, b) => b.choose(hand, 1) });   // the page it is open at: the button closes the list
       ctl.settle();
       return ctl.state.value === 'b' && !ctl.state.open && !ctl.io.bulb.lit;
     }),

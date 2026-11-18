@@ -190,6 +190,7 @@ function buildNavbar(p = {}) {
     links: all,
     io: { button: all[0].button, buttons: all.map(L => L.button), signs: all.flatMap(L => L.signs) },
     ready: L => ready(w, L),
+    chamberSet: L => chamberSet(w, L),
     pearlOf: L => pearlIn(w, L),
     restock: L => restock(w, L),
   };
@@ -250,8 +251,10 @@ const entry = Catalogue.register({
   name: 'Ender pearl navigation',
   category: 'Navigation',
   summary: 'One ender pearl stasis chamber per link. The stone button drains the chamber (a dispenser scoops the water, a piston pulls the soul sand away), the pearl drops onto slime, and two slime pistons, one tick apart, fling it up and across the page. The machine then resets itself and refills the chamber; the player throws in a new pearl.',
-  strict: true,
-  deviations: [],
+  strict: false,
+  deviations: [
+    'The element ignores a link press from the moment any button is pressed until every chamber holds a pearl again (about 3 s). In the game a player could press then. A second press on the same launcher after its button has popped out and before the chamber has refilled fires the dispenser again and pours its water over the open drop shaft, which the machine does not survive (the engine refuses uncontained water). A press on another launcher would work, but the element handles one navigation at a time.',
+  ],
   inputs: ['stone button (one per link)'],
   outputs: ['ender pearl launched up and to the east'],
   actions: ['press a button', 'throw an ender pearl into a chamber (restock)'],
@@ -261,7 +264,9 @@ const entry = Catalogue.register({
     'The soul sand piston is held out by a comparator in subtract mode reading a barrel with one item. Its two sides take an early and a late copy of the button signal, so the soul sand stays away until both slime pistons are home: slime must never touch the soul sand.',
     'The refill is triggered by an observer behind the water watching the piston head. Its first pulse (soul sand leaving) comes while the button still powers the dispenser, so only the second one makes a rising edge.',
     'Every wall block a slime block touches is a jukebox, the dispenser or a piston head, so slime never drags the wall. The two slime blocks are always at least two cells apart.',
-    'Pressing a button again before its chamber has refilled would pour water over the open drop shaft; the element ignores presses until the machine is home.',
+    'Pressing a button again before its chamber has refilled would pour water over the open drop shaft; the element ignores presses until the machine is home (see deviations).',
+    'In the game the launch depends on two slime pistons striking a falling pearl one redstone tick apart. The engine moves pistons instantly and treats entities as points, so this is the part of the design most likely to play out differently in Minecraft (see docs/AUDIT.md).',
+    'Restocking is a player action: as soon as a chamber is set and empty the element throws a pearl into it (world.hand.throwPearl). The navigation is the element watching the world: it follows the link when the launched pearl has left the viewport (SPEC 6 sketched a target block; the pearl leaves the page instead).',
     'Build params: links 1 to 6, signs 2 to 3 per link (a wider wall would put the far end in the path of the falling pearl) (a number, or one per link). The builder throws one pearl into each chamber after sealing.',
   ],
   params: [

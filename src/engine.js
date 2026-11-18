@@ -33,7 +33,6 @@ const BLOCK_DEFAULTS = {
   solid: true,            // entity collision
   push: 'normal',         // piston push class
   sticky: undefined,      // 'slime' | 'honey'
-  fake: false,            // legacy invented blocks; strict worlds reject them
   attach: null,           // 'att' (block in direction b.att), 'below', 'door' (upper door half): pops when that support moves
   source: false,          // a signal source that dust connects to (Java isSignalSource)
   holdsWater: true,       // flowing water cannot enter this cell (used to check that water sources are contained)
@@ -322,10 +321,6 @@ defineBlock('sculk', {
 // that every source is contained (see World.seal). Pistons displace water (push class destroy).
 defineBlock('water', { push: 'destroy', solid: false, mc: 'minecraft:water' });
 
-// Legacy invented blocks. Not real: strict worlds reject them.
-defineBlock('wall', { fake: true, push: 'immovable', conductive: true, mc: 'minecraft:deepslate_bricks' });
-defineBlock('wallb', { fake: true, push: 'immovable', conductive: true, mc: 'minecraft:stone_bricks' });
-defineBlock('ground', { fake: true, push: 'immovable', conductive: true, mc: 'minecraft:smooth_stone' });
 
 function faceProps(b) {
   if (b.att === 'D' || !b.att) return `face=floor,facing=${MCDIR[b.d || 'N']}`;
@@ -362,7 +357,6 @@ class World {
     this.c = new Map();
     this.t = 0;
     this.ev = [];
-    this.floor = [];
     this.sensors = [];
     this.vibs = [];
     this.hasWool = false;
@@ -432,7 +426,6 @@ class World {
         const def = blocks[b.t];
         const at = `${b.t} at (${b.x},${b.y},${b.z})`;
         if (!def) bad.push(`${at}: unknown block`);
-        else if (def.fake) bad.push(`${at}: '${b.t}' is not a vanilla block (R1)`);
         if (b.buried) bad.push(`${at}: 'buried' hides a block by fiat (R6)`);
         if (b.t === 'water' && !this.waterContained(b)) bad.push(`${at}: water source is not contained and would flow`);
         if (def && def.attach && !this.supported(b)) bad.push(`${at}: nothing to attach to`);
@@ -441,9 +434,7 @@ class World {
           if (!h || h.t !== 'head' || h.d !== b.d) bad.push(`${at}: extended piston without its head`);
         }
       }
-      if (this.floor.length) bad.push(`${this.floor.length} wiring link(s) in world.floor (R2)`);
       if (bad.length) throw new Error('World.seal: not a strict world:\n  ' + bad.join('\n  '));
-      Object.freeze(this.floor);
     }
     this._adopt();
     this.sealed = true;
@@ -548,10 +539,6 @@ class World {
         const n = this.nb(b, d);
         if (n && defOf(n.t).conductive) bump(strong, K(n.x, n.y, n.z), lv);
       }
-    }
-    // Legacy wiring links (not redstone; strict worlds have none).
-    for (const L of this.floor) {
-      if ((strong.get(K(...L.feed)) || 0) > 0) for (const cell of L.cells) bump(strong, K(...cell), 15);
     }
     this.strong = strong;
     this._computeDust(dusts);
@@ -1527,8 +1514,6 @@ class World {
     let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
     for (const b of list) { x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); z0 = Math.min(z0, b.z); x1 = Math.max(x1, b.x); y1 = Math.max(y1, b.y); z1 = Math.max(z1, b.z); }
     if (opts.clear !== false) out.push(`fill ${pos(x0, y0, z0)} ${pos(x1, y1, z1)} minecraft:air`);
-    const fake = list.filter(b => defOf(b.t).fake);
-    if (fake.length) out.push(`# ${fake.length} legacy invented block(s) (wall, wallb, ground) exported as look-alikes; they are immovable here but not in the game`);
     // Supports first, attached blocks after, each layer bottom-up.
     const rank = b => (defOf(b.t).attach ? 2 : b.t === 'water' ? 1 : 0);
     list.sort((a, b) => rank(a) - rank(b) || a.z - b.z || a.y - b.y || a.x - b.x);

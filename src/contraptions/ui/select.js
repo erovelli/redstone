@@ -77,15 +77,16 @@ function buildSelect(p = {}) {
 function playerOf(b) {
   const { button, bulb, lectern, reader } = b.io;
   const w = b.world;
-  // The player waits (the world settles) while the button is still in from the last press: a press then does
-  // nothing, and a page turn's pulse would be lost in the button's power (the bulb sees no rising edge).
-  const waitForButton = () => {
-    if (button.on) w.settle();
-  };
+  // A player's press while the button is still in from the last press does nothing (hand.press returns false),
+  // and a page turn then has its pulse lost in the button's power (the bulb sees no rising edge, the list stays
+  // open on the new page). The element passes every action on as it comes; only a page request waits.
   const toggle = hand => {
-    waitForButton();
-    if (!bulb.lit) b.active = Math.max(0, pageOf(reader.out || 0, b.options));
+    if (!bulb.lit && !button.on) b.active = Math.max(0, pageOf(reader.out || 0, b.options));
     return hand.press(button);
+  };
+  // The player waits: the world runs until it is quiet. Used only between the separate actions of a page request.
+  const wait = () => {
+    if (!w.quiet) w.settle();
   };
   return {
     toggle,
@@ -94,18 +95,19 @@ function playerOf(b) {
     // already open there, close the list with the button.
     choose(hand, k) {
       if (!(k >= 0 && k < b.options)) return false;
-      waitForButton();
       if ((lectern.page || 0) !== k) return hand.page(lectern, k);
       return bulb.lit ? toggle(hand) : false;
     },
-    // Page code setting the value: turn the page; if the list was closed, the pulse opened it, so press it shut.
+    // Page code setting the value (el.value = v), which settles at once like a native property: the player waits
+    // for a quiet world, turns the page and, if the list was closed (the pulse opened it), waits again and presses
+    // it shut. Each is a separate player action on a quiet world.
     pick(hand, k) {
       if (!(k >= 0 && k < b.options) || (lectern.page || 0) === k) return false;
-      waitForButton();
+      wait();
       const wasOpen = !!bulb.lit;
       hand.page(lectern, k);
       if (wasOpen) return true;
-      w.settle();
+      wait();
       return toggle(hand);
     },
   };
@@ -134,7 +136,8 @@ const entry = Catalogue.register({
   notes: [
     'A book of up to 15 pages gives every page its own comparator strength, so a select has 1 to 15 options. The opening shows up to 8 rows; a longer list scrolls inside it.',
     'The lectern\'s page-turn pulse (1 tick, to every side) reaches the bulb beside it; the bulb toggles on the rising edge, so a choice closes the list. Turning to the page it is already open at is no turn (no pulse): the element presses the button instead.',
-    'A stone button stays in for 10 ticks: a press while it is in does nothing, and a page turn then would be lost too (the bulb is already powered, so the pulse is no rising edge). The player waits for the button to come out before either.',
+    'A stone button stays in for 10 ticks: a press while it is in does nothing, and a page turn then is lost too (the bulb is already powered, so the pulse is no rising edge): the list stays open on the new page. The element passes each action on as it comes, as a player could make it.',
+    'The player waits (audited): a page request (el.value = v) settles at once, like a native property, so it is three separate player actions, each on a quiet world: wait, turn the page, and, if the list was closed (the pulse opened it), wait again and press the button.',
     'The curtain is rs-collapse\'s (honey and slime columns, one sticky piston each, at most 12 blocks per move); its lever is replaced by the comparator C1 that reads the bulb.',
     'Build with { values, value } (the element) or { options, sel } (the workbench), and { open: true } for a list that starts open.',
   ],

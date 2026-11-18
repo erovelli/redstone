@@ -29,6 +29,24 @@ module.exports = {
       c.settle(60);
       return c.state.value === null && c.io.barrel.fill === 0 && !c.io.lever.on && !c.quiet();
     }),
+    T('reduced motion: indeterminate is a steady state (pause lever on, bar dark, value null), built or set', () => {
+      const prev = global.matchMedia;
+      global.matchMedia = q => ({ matches: /reduce/.test(q) });
+      try {
+        const a = controller(spec, {});
+        const built = a.state.value === null && a.io.pause.on && !a.io.lever.on && a.quiet() && lit(a) === 0;
+        a.world.assertSteady(100);
+        const b = controller(spec, { value: '50' });
+        b.request('value', null);
+        b.settle(60);
+        const set = b.state.value === null && b.io.pause.on && b.quiet() && lit(b) === 0;
+        b.request('value', 50);
+        b.settle();
+        return built && set && b.state.value === 50 && !b.io.pause.on && b.quiet();
+      } finally {
+        if (prev === undefined) delete global.matchMedia; else global.matchMedia = prev;
+      }
+    }),
     T('values beyond the ends clamp to an empty or full bar', () => {
       const c = controller(spec, { value: '0' });
       c.request('value', 500);

@@ -30,12 +30,15 @@ module.exports = {
       const after = untilChange(ctl, 30);
       return ticks === 5 && changes.length === 1 && changes[0].value === 'l' && changes[0].events.join() === 'input,change' && after.ticks === -1;
     }),
-    T('two presses in the same tick: the second is refused (one press per tick)', () => {
+    T('two presses in the same tick both reach the machine: both latches set, no value, and the next press settles it', () => {
       const ctl = make(['a', 'b', 'c'], {});
       const first = ctl.act(spec.controls[0]);
       const second = ctl.act(spec.controls[2]);
       ctl.settle();
-      return first === true && second === false && ctl.state.value === 'a';
+      const both = ctl.io.lamps.filter(l => l.lit).length === 2 && ctl.state.value === '';
+      ctl.act(spec.controls[1]);
+      ctl.settle();
+      return first === true && second === true && both && ctl.state.value === 'b' && ctl.io.lamps.filter(l => l.lit).length === 1;
     }),
     T('a second press one tick later wins', () => {
       const ctl = make(['a', 'b', 'c'], {});

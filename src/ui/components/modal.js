@@ -20,8 +20,8 @@ const STYLES = `
 `;
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]), [contenteditable=""], [contenteditable="true"]';
 const PAD_EM = 1.6;            // the window's horizontal padding, in em
-const SIDE = 3;                // machine columns beside the opening: two frame columns and the latch
-const HIGH = 5 + 4 * 0.72;     // machine rows above and below the opening, plus four rows of depth
+const SIDE = 4;                // machine columns beside the opening: two frame columns and the latch's two
+const HIGH = 4 + 5 * 0.72;     // machine rows above and below the opening, plus five rows of depth
 const own = new WeakMap();     // per element: { opener, inerted, focused }
 const mine = el => own.get(el) || own.set(el, {}).get(el);
 
@@ -202,7 +202,7 @@ Redstone.ui.define('rs-modal', {
       eventDoc: 'When the door is home again after the close button was pressed.',
     },
     deployed: {
-      read: (io, b) => !!io.show.on || !io.tA.lit || !b.opening.every(([x, y, z]) => { const k = b.world.get(x, y, z); return !!k && (k.t === 'honey' || k.t === 'slime'); }),
+      read: (io, b) => !!io.show.on || !io.latch.on || !b.opening.every(([x, y, z]) => { const k = b.world.get(x, y, z); return !!k && (k.t === 'honey' || k.t === 'slime'); }),
       attr: 'data-deployed',
       doc: 'True while the overlay is up: from the open press until the latch is reset and the door is home.',
     },
@@ -261,7 +261,7 @@ Redstone.ui.define('rs-modal', {
       'data-rs-close': 'On any element inside the content: activating it presses the close button.',
     },
     properties: {
-      'showModal()': 'Press the open button. open becomes true when the door is clear (3 ticks).',
+      'showModal()': 'Press the open button. open becomes true when the door is clear (5 ticks).',
       'close()': 'Press the close button (Escape and a backdrop click do the same).',
     },
   },

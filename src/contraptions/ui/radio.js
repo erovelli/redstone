@@ -72,7 +72,7 @@ function buildRadio(p = {}) {
   // Derived state (dust levels, lock flags) is what the engine settles into; settle before sealing to write it.
   w.settle();
   w.seal();
-  return { world: w, box: [-1, 3, 0, H - 1, -1, 1], io, values: Array.isArray(p.values) ? p.values : [], pressedAt: -1 };
+  return { world: w, box: [-1, 3, 0, H - 1, -1, 1], io, values: Array.isArray(p.values) ? p.values : [] };
 }
 
 // The selected option: the one memory repeater that is on (-1 for none).
@@ -113,7 +113,7 @@ const entry = Catalogue.register({
   notes: [
     'Exclusivity is the latches: while any button is in, every memory repeater copies its own delay line, so only the pressed one stays on.',
     'D (3 ticks) is one tick longer than the lock path (feeder, torch, lock: 3 ticks), so the lock is back before the press ends at the latch.',
-    'Two presses in the same tick would set both latches; the element sends a player one press per tick, as the game does (one interaction per game tick).',
+    'Two presses in the same tick set both latches and light both lamps; the group then has no value until the next press, which settles it (a later press always wins). The element passes every press on, as a player could make them.',
     'The lower half of the bands is mirrored so that the dust line reaches every feeder: 2 to 6 options.',
     'Build with { sel: k } for option k chosen; { values } are the option values the element passes for its value property.',
   ],

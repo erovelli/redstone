@@ -41,7 +41,6 @@ const lines = [
   `# ${entry.name} (${entry.id}), exported by redstone scripts/export-commands.js for Minecraft Java 1.21`,
   `# Engine x east, y south, z up -> Minecraft x, z, y.${args.origin ? ` Origin ${args.origin.join(' ')}.` : ' Relative to where the function runs.'}`,
 ];
-if (!world.strict) lines.push('# Legacy (non-strict) contraption: it may rely on wiring links or invented blocks that do not exist in the game.');
-if (world.floor && world.floor.length) lines.push(`# ${world.floor.length} wiring link(s) are not exported: they are not redstone.`);
+if (!world.strict) lines.push('# Not a strict world: it may rely on rules the game does not have.');
 for (const c of world.toCommands({ origin: args.origin, clear: args.clear })) lines.push(c);
 process.stdout.write(lines.join('\n') + '\n');

@@ -15,16 +15,16 @@ function run(ctl, n) {
 module.exports = {
   suite: 'rs-modal',
   tests: [
-    T('open = true presses the open button: the overlay is up on tick 1, toggle fires on tick 3 when the door is clear', () => {
+    T('open = true presses the open button: the overlay is up on tick 1, toggle fires on tick 5 when the door is clear', () => {
       const ctl = controller(spec, {});
       if (spec.state.open.settle !== false || ctl.state.deployed || ctl.state.open) return false;
       ctl.request('open', true);
       const ch = run(ctl, 12);
       const up = ch.find(c => c.key === 'deployed');
       const open = ch.find(c => c.key === 'open');
-      return up.tick === 1 && up.value === true && open.tick === 3 && open.value === true && open.events.join() === 'toggle';
+      return up.tick === 1 && up.value === true && open.tick === 5 && open.value === true && open.events.join() === 'toggle';
     }),
-    T('the close control presses the close button: close and toggle fire on tick 1, the overlay goes on tick 7', () => {
+    T('the close control presses the close button: close and toggle fire on tick 1, the overlay goes on tick 5', () => {
       const ctl = controller(spec, { open: '' });
       if (!ctl.state.open || !ctl.state.deployed) return false;
       ctl.act(close);
@@ -32,7 +32,7 @@ module.exports = {
       const shut = ch.find(c => c.key === 'closed');
       const open = ch.find(c => c.key === 'open');
       const down = ch.find(c => c.key === 'deployed');
-      return shut.tick === 1 && shut.events.join() === 'close' && open.tick === 1 && open.events.join() === 'toggle' && down.tick === 7 && !ctl.state.deployed;
+      return shut.tick === 1 && shut.events.join() === 'close' && open.tick === 1 && open.events.join() === 'toggle' && down.tick === 5 && !ctl.state.deployed;
     }),
     T('closing during the opening ends closed (the later press wins), and no toggle fires: the door never cleared', () => {
       const ctl = controller(spec, {});
