@@ -94,7 +94,7 @@ const entry = Catalogue.register({
   inputs: ['one stone button per item', 'the none button'],
   outputs: ['one latch per item, plus none (exactly one on)', 'opening clear'],
   actions: ['press a button'],
-  timing: 'From any state, a press on an item\'s button: the curtain is in front of the opening at 4 ticks, the latches change at 5 and the item\'s body is clear at 7. The none button: the curtain is home at 4 and stays. The same for every item: all the latches are in one bank, so nothing travels down the list.',
+  timing: 'From any state, a press on an item\'s button: the curtain is in front of the opening at 4 ticks, the latches change at 5 and the item\'s body is clear at 14 (the curtain stays in front while any button is in). The none button: the curtain is home at 4 and stays. The same for every item: all the latches are in one bank, so nothing travels down the list.',
   notes: [
     'Exclusivity is rs-radio\'s latch bank: any button in unlocks every latch and each copies its own button.',
     'The none band\'s memory repeater lights a dust step two blocks down onto the piston row, beside the pulse feed, so the curtain is held shut while it is set.',
@@ -111,13 +111,13 @@ const entry = Catalogue.register({
   controls: [{ kind: 'button', io: 'b0', label: 'Item 1' }, { kind: 'button', io: 'b1', label: 'Item 2' }, { kind: 'button', io: 'none', label: 'None' }],
   build: buildAccordion,
   tests: [
-    T('open, switch and close: shut at 4, latches at 5, clear at 7; closing stays shut (every edge)', () => each(entry, p => {
+    T('open, switch and close: shut at 4, latches at 5, clear at 14; closing stays shut (every edge)', () => each(entry, p => {
       const c = buildAccordion(p), items = c.items;
       ui().testing.settle(c.world);
       if (openItem(c) !== -1 || !tabs().isHome(c)) return false;
       for (const k of [0, items - 1]) {
         const tr = trace(c, c.io.buttons[k]);
-        if (firstAt(tr, s => s.open === k) !== 7 || firstAt(tr, s => s.t > 3 && s.clear) !== 7) return false;
+        if (firstAt(tr, s => s.open === k) !== 14 || firstAt(tr, s => s.t > 3 && s.clear) !== 14) return false;
         if (tr.some(s => s.t >= 4 && s.t < 7 && s.clear)) return false;
       }
       const tr = trace(c, c.io.none);

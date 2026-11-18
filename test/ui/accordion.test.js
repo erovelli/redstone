@@ -20,21 +20,21 @@ module.exports = {
       const ctl = make();
       return ctl.state.open === -1 && ctl.state.value === '' && !ctl.state.shown0 && !ctl.state.shown1;
     }),
-    T('a header click opens its item when the opening is clear, 7 ticks after the press, with one change', () => {
+    T('a header click opens its item when the opening is clear, 14 ticks after the press, with one change', () => {
       const ctl = make();
       ctl.act(header(1));
       const a = untilChange(ctl);
       const keys = a.changes.map(c => c.key + '=' + c.value).join();
-      return a.ticks === 7 && keys === 'open=1,value=returns,shown1=true' && a.changes[1].events.join() === 'change';
+      return a.ticks === 14 && keys === 'open=1,value=returns,shown1=true' && a.changes[1].events.join() === 'change';
     }),
-    T('opening another item closes the first: hidden at 4, the other shown at 7', () => {
+    T('opening another item closes the first: hidden at 4, the other shown at 14', () => {
       const ctl = make();
       ctl.request('value', 'ship');
       ctl.settle();
       ctl.act(header(1));
       const a = untilChange(ctl);
       const b = untilChange(ctl);
-      return ctl.state.open === 1 && a.ticks === 4 && a.changes.map(c => c.key).join() === 'shown0' && b.ticks === 3 && b.changes[0].key === 'open';
+      return ctl.state.open === 1 && a.ticks === 4 && a.changes.map(c => c.key).join() === 'shown0' && b.ticks === 10 && b.changes[0].key === 'open';
     }),
     T('clicking the open item\'s header presses the none button and closes it once the curtain is home', () => {
       const ctl = make();

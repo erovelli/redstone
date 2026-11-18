@@ -27,7 +27,7 @@ module.exports = {
       const b = untilChange(ctl);
       const keys = b.changes.map(c => c.key + '=' + c.value).join();
       const change = b.changes.find(c => c.key === 'value');
-      return b.ticks === 3 && keys === 'selected=1,value=b,shown1=true' && change.events.join() === 'change';
+      return b.ticks === 10 && keys === 'selected=1,value=b,shown1=true' && change.events.join() === 'change';
     }),
     T('setting selected or value presses that tab and settles', () => {
       const ctl = make();

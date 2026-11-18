@@ -37,7 +37,6 @@ const FRAME = { color: 'white', d: 'N' };
 const MAX = 6;           // tabs: the collector reaches every feeder within 14 blocks (rs-radio's limit)
 const MAX_COLS = 14;     // the repeater gives the piston row 15 at its first column; the last piston needs 1
 const MAX_ROWS = 12;     // a column is one structure: at most 12 blocks for its piston
-const PULSE = 4;         // ticks the shutter stays shut: from 4 to 7 after a press (the latches change at 5)
 
 const yes = v => v === true || v === 'true';
 const int = (v, min, max, def) => {
@@ -107,8 +106,9 @@ function addBank(w, o) {
 // there reads nothing from above. A wall torch on the side of the floor block under the collector, halfway down
 // the bank (every button is within 14 blocks of it), is lit while no button is in; it lights a dust line south
 // along x = -2 one level below the floor. Near the front the line feeds a comparator in subtract mode twice: its
-// rear through a PULSE-tick repeater and its side directly. When a press puts the torch out the side goes dark at
-// once and the rear PULSE ticks later, so the comparator is lit for PULSE ticks. A repeater after it strongly
+// rear from a redstone block (always 15) and its side directly. While any button is in the torch is out, the side is
+// dark and the comparator is lit, so the shutter stays shut for as long as any button is in: a second press within
+// the first's 10 ticks cannot change the latches behind an open shutter. The comparator strongly
 // powers the block under the west end of the piston row's dust, which lights the whole row with 15.
 function addShutter(w, o) {
   const C = o.cols, R = o.rows, P = o.p, H = P - 1, ym = o.tap;
@@ -129,11 +129,11 @@ function addShutter(w, o) {
     return w.put(x, y, -2, t, s);
   };
   const torch = w.put(-2, ym, -1, 'torch', { att: 'E', lit: true });
-  for (let y = ym; y <= H - 2; y++) under(-2, y, 'dust');
-  under(-1, H - 2, 'dust');
+  for (let y = ym; y <= H - 3; y++) under(-2, y, 'dust');
+  for (const y of [H - 3, H - 2]) under(-1, y, 'dust');        // round the redstone block, never beside it
   for (const y of [H - 2, H - 1, H]) under(0, y, 'dust');
   under(-1, H, 'repeater', { d: 'W', delay: 1, on: true });   // the side must be 15 to cancel the rear
-  const delay = under(-2, H - 1, 'repeater', { d: 'S', delay: PULSE, on: true });
+  const delay = under(-2, H - 1, 'rblock');                   // the rear: always 15
   const comparator = under(-2, H, 'comparator', { d: 'S', mode: 'sub' });
   w.put(x0, P, z0, 'stone');                    // strongly powered by the comparator
   w.put(x0, P, z0 + 1, 'dust');
@@ -268,7 +268,7 @@ const entry = Catalogue.register({
   inputs: ['one stone button per tab'],
   outputs: ['one latch and lamp per tab (exactly one on)', 'opening clear'],
   actions: ['press a button'],
-  timing: 'Shutter closed 4 ticks after a press; the latches change at 5 (the old lamp goes dark 2 ticks later); the opening is clear again at 7, showing the new panel.',
+  timing: 'Shutter closed 4 ticks after a press; the latches change at 5 (the old lamp goes dark 2 ticks later); the shutter stays shut while any button is in and the opening is clear again at 14 (4 ticks after the last button comes out), showing the new panel.',
   notes: [
     'Exclusivity is the latches (see rs-radio): while any button is in, every memory repeater copies its own delay line.',
     'The shutter pulse is made under the bank floor: a wall torch on the floor block under the collector, halfway down the bank, goes out on a press; its dust line feeds a comparator in subtract mode, at the side directly (through a repeater, so it reaches 15) and at the rear through a 4-tick repeater. The comparator strongly powers the block under the west end of the piston row\'s dust.',
@@ -286,7 +286,7 @@ const entry = Catalogue.register({
   controls: [0, 1].map(k => ({ kind: 'button', io: 'b' + k, label: 'Tab ' + (k + 1) })),
   build: buildTabs,
   tests: [
-    T('each press: shutter closed at 4, latches change at 5, clear at 7 showing the pressed tab (every edge)', () => each(entry, p => {
+    T('each press: shutter closed at 4, latches change at 5, clear at 14 showing the pressed tab (every edge)', () => each(entry, p => {
       const n = int(p.tabs, 2, MAX, 3);
       const c = buildTabs(p);
       ui().testing.settle(c.world);
@@ -295,12 +295,31 @@ const entry = Catalogue.register({
         const from = latched(c.io);
         const tr = pressTrace(c, k);
         const closed = tr.find(s => s.home), changed = tr.find(s => s.latch === k), clear = tr.find(s => s.t > 4 && s.clear);
-        if (!closed || closed.t !== 4 || !clear || clear.t !== 7 || clear.latch !== k) return false;
+        if (!closed || closed.t !== 4 || !clear || clear.t !== 14 || clear.latch !== k) return false;
         if (from !== k && changed.t !== 5) return false;
         // Never two latches, never none, and the opening is shut whenever the latch is changing.
         if (tr.some(s => s.latch < 0)) return false;
         if (tr.some((s, i) => i && s.latch !== tr[i - 1].latch && s.clear)) return false;
         if (latched(c.io) !== k || c.io.lamps.some((l, j) => !!l.lit !== (j === k))) return false;
+      }
+      return true;
+    })),
+    T('a second press while the first button is in: the shutter stays shut until both are out, so the panel never swaps in view', () => [2, 3, 6].every(n => {
+      for (let g = 1; g <= 12; g++) {
+        const c = buildTabs({ tabs: n, sel: 0 }), w = c.world, hand = ui().testing.hand(w);
+        hand.press(c.io.buttons[1]);
+        // The panel on show (the latch seen through a clear opening) never changes while the opening stays clear.
+        let wasClear = true, shown = shownPanel(c), bad = false;
+        for (let t = 1; t <= 40; t++) {
+          if (t === g + 1) hand.press(c.io.buttons[n - 1]);   // g ticks after the first press
+          w.tick();
+          const clear = isClear(c), k = latched(c.io);
+          if (clear && wasClear && k !== shown) bad = true;
+          if (clear) shown = k;
+          wasClear = clear;
+        }
+        ui().testing.settle(w);
+        if (bad || latched(c.io) !== n - 1 || shownPanel(c) !== n - 1) throw new Error(`n ${n} gap ${g}`);
       }
       return true;
     })),
