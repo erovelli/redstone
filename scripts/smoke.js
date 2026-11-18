@@ -539,6 +539,43 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-accordion');
+  {
+    const { page, errors } = await open(browser);
+    const acc = 'rs-accordion';
+    await page.evaluate(() => {
+      const el = document.querySelector('rs-accordion');
+      el.addEventListener('change', ev => window.__events.push({ type: 'acc-change', value: ev.detail.value }));
+      [...el.children].forEach((d, k) => d.addEventListener('toggle', () => window.__events.push({ type: 'details-toggle', k, open: d.open })));
+    });
+    await page.locator(acc).scrollIntoViewIfNeeded();
+    const state = () => page.$eval(acc, el => ({ open: el.open, value: el.value, details: [...el.children].map(d => d.open).join() }));
+    check('accordion: starts with the details marked open; headers have aria-expanded; a close-all control', await page.$eval(acc, el => {
+      const b = [...el.shadowRoot.querySelectorAll('.hit')].filter(h => !h.hidden);
+      return el.open === 1 && el.value === 'Returns' && b.length === 4 && b[1].getAttribute('aria-expanded') === 'true' && b[0].getAttribute('aria-expanded') === 'false' &&
+        b[0].getAttribute('aria-label') === 'Shipping' && b[3].getAttribute('aria-label') === 'Close all';
+    }));
+    await page.locator(acc + ' >> .hit').nth(0).click();
+    check('accordion: a header click opens its item when the opening clears, and closes the other', await until(page, s => document.querySelector(s).open === 0, acc));
+    const s0 = await state();
+    check('accordion: each details mirrors it', s0.details === 'true,false,false', s0);
+    await page.waitForTimeout(300);
+    let ev = await events(page);
+    check('accordion: one change; native toggle on both details', ev.filter(e => e.type === 'acc-change').length === 1 && ev.filter(e => e.type === 'details-toggle').length === 2, ev);
+    await page.waitForTimeout(1100);
+    await page.locator(acc + ' >> .hit').nth(0).focus();
+    await page.keyboard.press('Enter');
+    check('accordion: Enter on the open header closes it (the none button)', await until(page, s => document.querySelector(s).open === -1, acc) &&
+      await page.$eval(acc, el => el.contraption.io.none.on || el.contraption.state.value === ''));
+    check('accordion: no body shown, every details closed', await page.$eval(acc, el => [...el.children].every(d => !d.open) && el.shadowRoot.querySelectorAll('.window:not([hidden])').length === 0));
+    await page.waitForTimeout(1100);
+    await page.$eval(acc, el => { el.children[2].open = true; });
+    check('accordion: page code opening a details presses its button', await until(page, s => document.querySelector(s).open === 2, acc));
+    check('accordion: el.value = "Shipping" settles at once', await page.$eval(acc, el => { el.value = 'Shipping'; return el.open === 0 && el.children[0].open && !el.children[2].open; }));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });

@@ -725,7 +725,11 @@ class RedstoneElement extends HTMLElement {
   _syncNames() {
     // labelFallback(el): text shown on the signs when nothing is slotted into labelSlot (a summary attribute).
     const fallback = this._def.spec.labelFallback && this._labelEl && this._labelEl.querySelector('slot');
-    if (fallback) fallback.textContent = this._def.spec.labelFallback(this);
+    // Only on a change: replacing the fallback text node signals slotchange, which calls this again.
+    if (fallback) {
+      const text = this._def.spec.labelFallback(this);
+      if (fallback.textContent !== text) fallback.textContent = text;
+    }
     const name = this._labelText();
     for (const c of this._controls || []) {
       const label = typeof c.spec.label === 'function' ? c.spec.label(this) : c.spec.label || name;

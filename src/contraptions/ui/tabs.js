@@ -171,9 +171,11 @@ function buildSelector(o) {
     w.put(3, H - 1, 0, 'dust');
     w.put(3, H, 0, 'dust');
     w.set(3, P, 0, null);
-    if (!w.get(3, P, -1)) {
-      w.put(3, P, -2, 'stone');
-      w.put(3, P, -1, 'dust');
+    // A narrow opening ends west of x = 3: carry the piston row's dust on to the step.
+    for (let x = sh.E; x <= 3; x++) {
+      if (w.get(x, P, -1)) continue;
+      w.put(x, P, -2, 'stone');
+      w.put(x, P, -1, 'dust');
     }
   }
   w.settle();
