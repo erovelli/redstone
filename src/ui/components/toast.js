@@ -18,6 +18,17 @@ function cellsFor(el, ctx) {
   return Math.max(2, Math.min(11, Math.ceil((px * 1.15) / ctx.B + 1)));   // 15% for proportional fonts, half a block each side
 }
 
+// <rs-toast open>: a toast that shows as the page loads. It is built shut and the element presses show once when the
+// machine is first mounted (the page showing it, as show() does), so its timer runs. The attribute is read once per
+// element: after that it mirrors the curtain.
+const startsOpen = new WeakMap();
+const opensAtStart = el => {
+  if (!el) return false;
+  if (!startsOpen.has(el)) startsOpen.set(el, el.hasAttribute('open'));
+  return startsOpen.get(el);
+};
+const shown = new WeakSet();
+
 function spec(persistent) {
   return {
     entry: 'ui-toast',
@@ -26,7 +37,16 @@ function spec(persistent) {
       persistent: () => persistent,
       // duration is in milliseconds; one repeater tick is 100 ms.
       ticks: el => Math.round((el && Number(el.getAttribute('duration')) > 0 ? Number(el.getAttribute('duration')) : 4000) / 100),
-      open: { attr: 'open', type: 'boolean', doc: 'Built open (the latch set). A toast built open has no timer running: show() starts one.' },
+      // An alert is built open (the latch set); a toast is built shut and shown once mounted, so its timer runs.
+      open: persistent
+        ? { attr: 'open', type: 'boolean', doc: 'Built open (the latch set).' }
+        : () => false,
+    },
+    mounted: persistent ? undefined : (el, view, built) => {
+      if (shown.has(built) || !opensAtStart(el)) return;
+      shown.add(built);
+      // After the build has finished: the property set presses the show button and lets the world run.
+      queueMicrotask(() => { if (el.contraption && el.contraption.built === built) el.open = true; });
     },
     opening: { cells: 'opening', shownWhen: 'open' },
     controls: [
@@ -58,7 +78,7 @@ function spec(persistent) {
     observe: persistent ? [] : ['duration'],
     styles: STYLES,
     docs: {
-      attributes: persistent ? {} : { duration: 'Milliseconds the toast stays open (default 4000). The timer is a line of repeaters, 100 ms per tick, from about 1 s up to 15.6 s; a longer duration makes the machine wider.' },
+      attributes: persistent ? {} : { open: 'Show as the page loads: the element presses the show button once, so the timer runs.', duration: 'Milliseconds the toast stays open (default 4000). The timer is a line of repeaters, 100 ms per tick, from about 1 s up to 15.6 s; a longer duration makes the machine wider.' },
       properties: { 'show()': 'Press the show button.', 'close()': 'Press the dismiss button.' },
     },
   };

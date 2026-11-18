@@ -22,6 +22,25 @@ const T = (name, fn) => ({ name, fn });
 module.exports = {
   suite: 'rs-toast',
   tests: [
+    T('<rs-toast open>: built shut, then shown once when mounted, so its timer runs and closes it', () => {
+      const c = controller(toast, { open: '' }, { text: 'Saved.' });
+      if (c.state.open || c.params.open !== false) return false;
+      const el = { hasAttribute: n => n === 'open', get contraption() { return { built: c.built }; }, set open(v) { c.request('open', v); } };
+      const prev = global.queueMicrotask;
+      global.queueMicrotask = fn => fn();
+      try {
+        toast.mounted(el, null, c.built);
+        toast.mounted(el, null, c.built);          // a remount (resize) does not press again
+      } finally { global.queueMicrotask = prev; }
+      const opened = untilChange(c, 10);
+      if (!opened.changes.some(ch => ch.key === 'open' && ch.value === true)) return false;
+      const closed = untilChange(c, 200);
+      return closed.changes.some(ch => ch.key === 'open' && ch.value === false) && c.io.show.on === false;
+    }),
+    T('<rs-alert open> is built open (no timer to run)', () => {
+      const c = controller(alert, { open: '' }, { text: 'Disk' });
+      return c.state.open === true && !alert.mounted;
+    }),
     T('show (open = true) presses the show button; toggle fires on tick 2 when the curtain is down', () => {
       const c = controller(toast, {}, { text: 'Saved.' });
       if (toast.state.open.settle !== false) return false;
