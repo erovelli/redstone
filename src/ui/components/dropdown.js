@@ -11,7 +11,7 @@
 // over the page while the menu is in use.
 (function () {
 const STYLES = `
-  :host { --rs-block: 30px; z-index: 20; vertical-align: top; }
+  :host { z-index: 20; vertical-align: top; }
   :host([data-deployed]) { z-index: 2147482300; }
   :host(:not([data-deployed]):not([inspect])) .box { clip-path: inset(0 0 calc(100% - var(--rs-top, 100%)) 0); }
   .window { overflow: hidden; background: var(--rs-window-bg, #fbf7ea); color: var(--rs-window-ink, #1b120a); }

@@ -11,7 +11,7 @@
 // again once the curtain is back home.
 (function () {
 const STYLES = `
-  :host { display: block; --rs-block: 32px; }
+  :host { display: block; }
   :host(:not([data-deployed]):not([inspect])) .box { height: calc(var(--b) * 4.16 - 1px) !important; overflow: hidden; }
   .window { padding: .4em .7em; box-sizing: border-box; background: var(--rs-window-bg, #fbf7ea); color: var(--rs-window-ink, #1b120a); }
 `;

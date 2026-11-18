@@ -1,7 +1,7 @@
-/* rs-breadcrumb: without the script, a row of links. Upgraded, each crumb is the text on its oak signs (page CSS,
-   so it wins over the page's own link colours). */
-rs-breadcrumb { display: block; --rs-block: 32px; }
-rs-breadcrumb:not(:defined) { display: flex; flex-wrap: wrap; gap: .3em 1em; min-height: calc(var(--rs-block) * 2.4); align-items: flex-end; }
-rs-breadcrumb:defined > * { color: var(--rs-sign-ink, #1b120a); text-decoration: none; font: 600 calc(var(--rs-block) * .4)/1.2 var(--rs-sign-font, ui-monospace, Menlo, Consolas, monospace); }
+/* rs-breadcrumb: without the script, a row of links. Upgraded, each crumb is the text on its oak signs (page CSS, so
+   it wins over the page's own link colours), in the signs' own font (--rs-sign-text, inherited from the element). */
+rs-breadcrumb { display: block; }
+rs-breadcrumb:not(:defined) { display: flex; flex-wrap: wrap; gap: .3em 1em; min-height: calc(var(--rs-block, 36px) * 2.4); align-items: flex-end; }
+rs-breadcrumb:defined > * { color: var(--rs-sign-ink, #1b120a); text-decoration: none; font: var(--rs-sign-text); }
 rs-breadcrumb:defined > a:hover { text-decoration: underline; }
-rs-breadcrumb:defined > [aria-current="page"] { color: var(--rs-navbar-current, #7a1405); }
+rs-breadcrumb:defined > [aria-current="page"] { color: var(--rs-navbar-current, #5c1003); }

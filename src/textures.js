@@ -486,6 +486,18 @@ function paintPlanks(px, wood) {
 
 T('block/oak_planks', (ctx, px) => paintPlanks(px, OAK));
 
+// A sign's board: pale, planed oak with faint grain and no plank seams, like vanilla's sign (which lives in an
+// entity sheet, hence the rs/ name). Text sits on it, so it stays light and even: the ink keeps 4.5:1 or more.
+// Any 16 x 8 band of it reads the same (wall, standing and hanging boards show different rows).
+T('rs/oak_sign', (ctx, px) => {
+  px.noise(['#d6b47e', '#d6b47e', '#dcbb86', '#cfad77']);
+  for (let y = 0; y < 16; y++) {
+    const x = Math.floor(px.random() * 12);
+    px.rect(x, y, 3 + Math.floor(px.random() * 5), 1, y % 2 ? '#c9a671' : '#e2c48f');
+  }
+  px.speckle('#c2a06b', 6, 2);
+});
+
 T('block/oak_log', (ctx, px) => {
   px.noise(['#6b5230', '#5f4829', '#755a35']);
   for (let x = 1; x < 16; x += 3) px.rect(x, 0, 1, 16, '#4a3820');

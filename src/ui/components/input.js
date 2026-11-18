@@ -131,16 +131,16 @@ Redstone.ui.define('rs-input', {
   },
 
   styles: `
-    :host { --rs-block: 32px; flex-wrap: wrap; }
+    :host { flex-wrap: wrap; }
     .caption { order: -1; cursor: text; }
     .rs-text, .rs-field { position: absolute; z-index: 4; box-sizing: border-box; margin: 0; border: 0; border-radius: 0;
-      padding: 0 calc(var(--b) * .12); background: transparent; color: var(--rs-sign-ink, #1b120a);
-      font: 500 calc(var(--b) * .4)/1 var(--rs-sign-font, ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace); letter-spacing: 0; }
+      padding: 0 calc(var(--b) * .25); background: transparent; color: var(--rs-sign-ink, #1b120a);
+      font: var(--rs-sign-text); letter-spacing: 0; }
     .rs-text { display: flex; align-items: center; white-space: pre; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
-    .rs-text.empty { opacity: .55; }
+    .rs-text.empty { color: var(--rs-sign-placeholder, #3b2a19); font-style: italic; }
     .rs-field { opacity: 0; cursor: text; }
     .rs-field:focus { opacity: 1; outline: 2px dashed var(--rs-focus, currentColor); outline-offset: 2px; }
-    .rs-field::placeholder { color: inherit; opacity: .55; }
+    .rs-field::placeholder { color: var(--rs-sign-placeholder, #3b2a19); opacity: 1; font-style: italic; }
     :host(:focus-within) .rs-text { visibility: hidden; }
     :host([disabled]) .rs-field { cursor: not-allowed; }`,
 

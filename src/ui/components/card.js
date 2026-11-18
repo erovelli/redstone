@@ -10,7 +10,6 @@
 (function () {
 const STYLES = `
   :host { display: block; min-width: 0; flex: 1 1 16em; --rs-block: 24px; }
-  :host([data-rs-header]) { --rs-block: 32px; }
   .window { padding: .6em .8em; box-sizing: border-box; background: var(--rs-window-bg, #fbf7ea); color: var(--rs-window-ink, #1b120a); }
 `;
 const PAD_EM = 1.6;
@@ -92,7 +91,7 @@ Redstone.ui.define('rs-card', {
     },
   },
   mounted(el) {
-    // Sign text is 0.4 of a block: with a header the card uses 32 px blocks (12.8 px text, SPEC I3).
+    // With a header the core raises the block to its sign size (36 px, SPEC I3); refresh when that changes.
     const header = !!headerText(el);
     if (el.hasAttribute('data-rs-header') !== header) {
       el.toggleAttribute('data-rs-header', header);

@@ -96,10 +96,10 @@ Redstone.ui.define('rs-steps', {
   mounted,
   observe: ['run-label', 'next-label', 'back-label'],
   styles: `
-    :host { display: inline-block; --rs-block: 32px; }
+    :host { display: inline-block; }
     .rs-step-label { position: absolute; z-index: 2; display: flex; align-items: center; justify-content: center; overflow: hidden;
       white-space: nowrap; pointer-events: none; color: var(--rs-sign-ink, #1b120a);
-      font: 500 calc(var(--b) * .4)/1 var(--rs-sign-font, ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace); }`,
+      font: var(--rs-sign-text); }`,
   docs: {
     attributes: { '(children)': 'One child element per step (2 to 8; manual: 2 to 5); its text goes on the step\'s signs.' },
     properties: { 'next()': 'Manual: press the button (one step on).', 'previous()': 'Manual: take one book back (one step back).' },

@@ -12,10 +12,9 @@
 // returns to the trigger afterwards. Put it where no ancestor has a transform (a child of <body> is simplest).
 (function () {
 const STYLES = `
-  :host { --rs-block: 32px; position: fixed; inset: 0; z-index: 2147482000; display: flex; align-items: center;
+  :host { position: fixed; inset: 0; z-index: 2147482000; display: flex; align-items: center;
     justify-content: center; max-width: none; background: var(--rs-backdrop, rgba(12, 8, 4, .6)); }
   :host(:not([data-deployed])) { visibility: hidden; pointer-events: none; background: none; }
-  @media (max-width: 420px) { :host { --rs-block: 30px; } }
   .rs-x { font-size: calc(var(--b) * .5); }
   .window { padding: .5em .8em; box-sizing: border-box; background: var(--rs-window-bg, #fbf7ea); color: var(--rs-window-ink, #1b120a); }
 `;

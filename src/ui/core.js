@@ -226,18 +226,25 @@ const testing = {
   },
 };
 
-// How many sign blocks a label needs. One block holds about 4 characters at the sign font (0.4 of a block).
+// Sign text (SPEC I3). A wall sign's board is half a block tall, so text of SIGN_TEXT of a block fills most of it.
+// A component with sign text defaults to SIGN_BLOCK px blocks and never goes smaller (an author's smaller
+// --rs-block is raised to it, and a narrow container scrolls rather than shrinking the blocks): 0.42 x 36 = 15.1 px.
+const SIGN_BLOCK = 36;
+const SIGN_TEXT = 0.42;
+
+// How many sign blocks a label needs. One block holds about 4 characters of a bold monospace at the sign font
+// (0.42 of a block); in the browser `measure` measures the text in the real sign font.
 function signsFor(text, opts = {}) {
   const min = opts.min === undefined ? 1 : opts.min;
   const max = opts.max === undefined ? 6 : opts.max;
   const t = String(text || '').trim();
   if (!t) return min;
-  const width = typeof opts.measure === 'function' ? opts.measure(t) : t.length * 0.24;   // in blocks
+  const width = typeof opts.measure === 'function' ? opts.measure(t) : t.length * 0.26;   // in blocks
   return Math.max(min, Math.min(max, Math.ceil(width + 0.25)));   // a little margin at each end
 }
 
 const ui = {
-  compat, coerce, paramsFor, paramAttributes, sameParams, diffState, Controller, testing, signsFor,
+  compat, coerce, paramsFor, paramAttributes, sameParams, diffState, Controller, testing, signsFor, SIGN_BLOCK, SIGN_TEXT,
   registry: new Map(),
 };
 
@@ -353,16 +360,23 @@ function playSound(ev) {
 }
 
 /* ---------- shadow DOM ---------- */
+// The default sign font: a bold monospace, which stays crisp and even on the pixel-art boards. --rs-sign-font
+// replaces it (the docs page uses a pixel font).
+const SIGN_FONT = 'ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace';
+// The core sets --b and --t (the block's front and top sizes in px) on the host when it mounts a view, so every rule
+// in the shadow root, and slotted page content, can size itself from them. --rs-sign-text is the sign text's font
+// for a component's own text overlays (font: var(--rs-sign-text)); .label is the core's.
 const BASE_CSS = `
-:host { display: inline-block; vertical-align: middle; position: relative; max-width: 100%; line-height: 0; }
+:host { display: inline-block; vertical-align: middle; position: relative; max-width: 100%; line-height: 0;
+  --rs-sign-text: var(--rs-sign-weight, 700) calc(var(--b) * ${SIGN_TEXT})/1 var(--rs-sign-font, ${SIGN_FONT}); }
 :host([hidden]) { display: none; }
 :host([disabled]) .box { filter: saturate(.35) brightness(.92); }
 .box { position: relative; }
 .stage { position: relative; }
 .stage canvas { position: absolute; left: 0; top: 0; image-rendering: pixelated; pointer-events: none; }
 .label { position: absolute; z-index: 2; display: flex; align-items: center; justify-content: center; overflow: hidden;
-  white-space: nowrap; text-overflow: ellipsis; pointer-events: none; color: var(--rs-sign-ink, #1b120a);
-  font: 500 calc(var(--b) * .4)/1 var(--rs-sign-font, ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace); letter-spacing: 0; }
+  white-space: nowrap; pointer-events: none; color: var(--rs-sign-ink, #1b120a); letter-spacing: 0; line-height: 1;
+  font-family: var(--rs-sign-font, ${SIGN_FONT}); font-weight: var(--rs-sign-weight, 700); font-size: calc(var(--b) * ${SIGN_TEXT}); }
 .label[hidden], .window[hidden] { display: none; }
 :host([data-rs-beside]) { display: inline-flex; align-items: center; gap: calc(var(--rs-block, 24px) * .4); }
 .caption { line-height: normal; cursor: pointer; user-select: none; }
@@ -377,10 +391,13 @@ const BASE_CSS = `
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 `;
 
-function blockSize(el) {
+// The block size the element asks for: --rs-block, 12 to 48 (default 24). With sign text (signs true) the default
+// and the minimum are SIGN_BLOCK.
+function blockSize(el, signs) {
   const raw = getComputedStyle(el).getPropertyValue('--rs-block').trim();
   const n = parseFloat(raw);
-  return Math.max(12, Math.min(48, Number.isFinite(n) ? n : 24));
+  const floor = signs ? SIGN_BLOCK : 12;
+  return Math.max(floor, Math.min(48, Number.isFinite(n) ? n : signs ? SIGN_BLOCK : 24));
 }
 
 // The nearest ancestor with a box: a display: contents parent (a <form> laid out by its own parent) has none.
@@ -522,7 +539,7 @@ class RedstoneElement extends HTMLElement {
     const labelSlot = spec.label && !beside ? (spec.labelSlot ? `<slot name="${spec.labelSlot}"></slot>` : '<slot></slot>') : '';
     const openings = asList(spec.opening);
     const defaultInWindow = openings.some(o => !o.slot);
-    root.innerHTML = `<style>${BASE_CSS}${spec.styles || ''}</style>
+    root.innerHTML = `<style>${BASE_CSS}${spec.styles || ''}</style><style class="rs-size"></style>
       <div class="box rs-own" part="box">
         <div class="stage" part="stage" aria-hidden="true"></div>
         <div class="label" part="label"${spec.readLabel ? '' : ' aria-hidden="true"'}>${labelSlot}</div>
@@ -533,6 +550,7 @@ class RedstoneElement extends HTMLElement {
       ${!spec.label && !defaultInWindow ? '<div class="stash"><slot></slot></div>' : ''}
       <span class="sr" aria-live="polite"></span>`;
     this._box = root.querySelector('.box');
+    this._sizeStyle = root.querySelector('.rs-size');
     this._stage = root.querySelector('.stage');
     this._labelEl = root.querySelector('.label');
     if (beside) {
@@ -563,17 +581,42 @@ class RedstoneElement extends HTMLElement {
   }
 
   /* ----- build and view ----- */
-  _ctx() {
+  _ctx(B) {
     const el = this;
     const text = this._labelText(true);
-    const font = getComputedStyle(this).getPropertyValue('--rs-sign-font').trim() || 'ui-monospace, Menlo, Consolas, monospace';
     let cv = null;
+    // Measured in the sign font as the label resolves it (--rs-sign-font, weight and all), in blocks.
     const measure = t => {
-      cv = cv || document.createElement('canvas').getContext('2d');
-      cv.font = `500 40px ${font}`;
-      return cv.measureText(t).width / 100;   // in blocks: the font is 0.4 of a block
+      if (!cv) {
+        cv = document.createElement('canvas').getContext('2d');
+        const cs = getComputedStyle(this._labelEl);
+        cv.font = `${cs.fontWeight} 100px ${cs.fontFamily}`;
+      }
+      return (cv.measureText(t).width / 100) * SIGN_TEXT;
     };
-    return { el, B: blockSize(this), text, measure, signsFor: (t, o) => signsFor(t, Object.assign({ measure }, o)) };
+    if (B === undefined) B = blockSize(this, this._hasSignText());
+    return { el, B, text, measure, signsFor: (t, o) => signsFor(t, Object.assign({ measure }, o)) };
+  }
+  // Whether the machine carries text on signs, which sets the block size's default and floor (SPEC I3): the core's
+  // label has text, or the `signs` param (the signs a component lays its own text on) comes to one or more.
+  // spec.signText: true | false | (el) => bool decides instead.
+  _hasSignText() {
+    const spec = this._def.spec;
+    if (spec.signText !== undefined) return typeof spec.signText === 'function' ? !!spec.signText(this) : !!spec.signText;
+    if (spec.label && spec.label !== 'beside') {
+      if (!spec.labelSlot) return !!this._labelText(true);
+      const own = [...this.children].filter(c => c.slot === spec.labelSlot).map(c => c.textContent).join('').trim();
+      return !!(own || (spec.labelFallback && String(spec.labelFallback(this) || '').trim()));
+    }
+    const m = spec.params && spec.params.signs;
+    if (!m) return false;
+    if (typeof m !== 'function') return true;
+    try {
+      const n = m(this, this._ctx(SIGN_BLOCK));
+      return Array.isArray(n) ? n.some(v => v > 0) : n > 0;
+    } catch (e) {
+      return true;
+    }
   }
   _params() {
     const ctx = this._ctx();
@@ -611,7 +654,8 @@ class RedstoneElement extends HTMLElement {
     });
   }
   _fitBlock() {
-    const want = blockSize(this);
+    const signs = this._hasSignText();
+    const want = blockSize(this, signs);
     const [x0, x1, y0, y1] = this._ctl.built.box;
     const cols = x1 - x0 + 1;
     const parent = boxParent(this);
@@ -621,8 +665,8 @@ class RedstoneElement extends HTMLElement {
       avail = parent.clientWidth - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
     }
     if (!(avail > 0)) avail = Infinity;
-    // spec.minBlock: never shrink below this (sign text stays legible); the element scrolls instead.
-    const floor = Math.max(12, Math.min(want, this._def.spec.minBlock || 12));
+    // Never shrink sign text (SPEC I3), nor below spec.minBlock: the element scrolls instead.
+    const floor = signs ? SIGN_BLOCK : Math.max(12, Math.min(want, this._def.spec.minBlock || 12));
     return Math.max(floor, Math.min(want, Math.floor(avail / cols)));
   }
   _mountView() {
@@ -634,6 +678,10 @@ class RedstoneElement extends HTMLElement {
     const view = this._view = R.makeView(this._stage, this._ctl.built, { B, T, inspect: this.inspect });
     if (this.inspect) compat.setInspect(view, true);
     this._box.style.setProperty('--b', B + 'px');
+    this._sizeStyle.textContent = `:host { --b: ${B}px; --t: ${T}px; }`;
+    this._box.style.marginBottom = '';
+    this._box.style.marginRight = '';
+    this._trim = null;
     const cap = this.shadowRoot.querySelector('.caption');
     if (cap) {
       cap.style.setProperty('--b', B + 'px');
@@ -643,6 +691,7 @@ class RedstoneElement extends HTMLElement {
     this._box.style.height = view.H + 'px';
     this._makeControls();
     this._layout();
+    if (this._def.spec.inline) this._inline(view);
     // spec.mounted(el, view, built): the element may add its own overlays (rs-navbar's links and pearl sky).
     if (this._def.spec.mounted) this._def.spec.mounted(this, view, this._ctl.built);
     view.draw(performance.now());
@@ -717,6 +766,8 @@ class RedstoneElement extends HTMLElement {
     for (const c of this._controls || []) {
       const blocks = asList(c.spec.area || c.spec.io).flatMap(k => blocksOf(io[k])).filter(b => world.get(b.x, b.y, b.z) === b);
       const r = union(this._cellRects(blocks));
+      // An inline element's box ends above the empty front row (see _inline): so does its hit area.
+      if (r && this._trim) r.h = Math.max(0, Math.min(r.h, this._trim - r.y));
       c.btn.hidden = !r;
       if (r) place(c.btn, r);
     }
@@ -731,6 +782,33 @@ class RedstoneElement extends HTMLElement {
       const r = union(cells.map(c => compat.rectOf(this._view, c, 'front')));
       if (r) place(this._windows[i], r);
     });
+  }
+  // spec.inline: the element sits in a line of text (rs-chip). Its box ends at the bottom of the wall its label signs
+  // hang on and at its last block on the right, so the empty front row below them and an empty column the machine
+  // keeps for a piston stroke reserve no space in the line; the sign text's baseline sits on the line's baseline.
+  _inline(view) {
+    const spec = this._def.spec;
+    const signs = blocksOf(this._ctl.io[spec.label]);
+    if (!signs.length) return;
+    const boards = union(signs.map(b => compat.rectOf(view, b, 'front')));
+    // A wall sign (att N) hangs on the block behind it: that block's front face reaches below the board.
+    const walls = signs.filter(b => !b.att || b.att === 'N').map(b => compat.rectOf(view, [b.x, b.y - 1, b.z], 'front'));
+    const bottom = Math.max(boards.y + boards.h, ...walls.map(r => r.y + r.h));
+    // The text's baseline: a line box of 1em centred on the board, with the font's content area centred in it.
+    const size = view.B * SIGN_TEXT;
+    const cs = getComputedStyle(this._labelEl);
+    const g = document.createElement('canvas').getContext('2d');
+    g.font = `${cs.fontWeight} ${size}px ${cs.fontFamily}`;
+    const m = g.measureText('Hxg');
+    const ascent = m.fontBoundingBoxAscent || size * 0.8;
+    const descent = m.fontBoundingBoxDescent || size * 0.2;
+    const baseline = boards.y + boards.h / 2 + (ascent - descent) / 2;
+    this._trim = bottom;
+    this._box.style.marginBottom = -(view.H - bottom) + 'px';
+    const cells = union(this._cellRects([...this._ctl.world.c.values()]));
+    if (cells) this._box.style.marginRight = -Math.max(0, view.W - (cells.x + cells.w)) + 'px';
+    this._sizeStyle.textContent += `:host { vertical-align: ${-(bottom - baseline).toFixed(2)}px; }`;
+    this._layout();
   }
   _labelText(raw) {
     if (!raw) {

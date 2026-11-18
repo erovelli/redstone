@@ -640,7 +640,8 @@ defineModel('sign', {
     } else if (b.kind === 'standing' || att === 'D') {
       list.push({ from: [7, 7, 0], to: [9, 9, 7], south: 'block/oak_log', up: 'block/oak_log' });
     }
-    list.push({ from: board[0], to: board[1], south: 'block/oak_planks', up: 'block/oak_planks' });
+    // The board is pale planed oak (rs/oak_sign), not planks: the text on it must read (SPEC I3).
+    list.push({ from: board[0], to: board[1], south: 'rs/oak_sign', up: 'rs/oak_sign' });
     return list;
   },
   rects: b => {

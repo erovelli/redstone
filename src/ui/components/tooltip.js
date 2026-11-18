@@ -10,9 +10,9 @@
 // no room), kept on screen, only while it is in use.
 (function () {
 const STYLES = `
-  :host { --rs-block: 30px; line-height: normal; vertical-align: baseline; }
-  :host([for]) { position: fixed; left: 0; top: 0; width: 1px; height: 1px; }
-  .box { position: fixed; left: 0; top: 0; z-index: 2147482500; }
+  :host { line-height: normal; vertical-align: baseline; }
+  :host([for]) { position: fixed; left: 0; top: 0; width: 1px; height: 1px; pointer-events: none; }
+  .box { position: fixed; left: 0; top: 0; z-index: 2147482500; pointer-events: auto; }
   :host(:not([data-deployed])) .box { visibility: hidden; }
   :host(:not([open])) .label { visibility: hidden; }
 `;

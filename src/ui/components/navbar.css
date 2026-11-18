@@ -1,9 +1,10 @@
-/* rs-navbar: 32 px blocks so the 0.4-block sign text is 12.8 px. Before the element upgrades (or without the
-   script) it is a plain row of links in a box of about the wall's height (6 rows + 5 rows of depth). */
-rs-navbar { display: block; --rs-block: 32px; }
+/* rs-navbar: sign text needs the core's sign block size (36 px: 15 px text, SPEC I3). Before the element upgrades
+   (or without the script) it is a plain row of links in a box of about the wall's height (6 rows + 5 rows of depth). */
+rs-navbar { display: block; }
 rs-navbar:not(:defined) { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .4em 1.2em; box-sizing: border-box;
-  min-height: calc(var(--rs-block) * 9.6); padding: .4em; }
-/* Upgraded, each link is the text on its oak signs (page CSS, so it wins over the page's own link colours). */
-rs-navbar:defined > a { color: var(--rs-sign-ink, #1b120a); text-decoration: none; font: 600 calc(var(--b, 32px) * .4)/1.2 var(--rs-sign-font, ui-monospace, Menlo, Consolas, monospace); }
+  min-height: calc(var(--rs-block, 36px) * 9.6); padding: .4em; }
+/* Upgraded, each link is the text on its oak signs (page CSS, so it wins over the page's own link colours). The
+   font is the signs' own (--rs-sign-text, inherited from the element). */
+rs-navbar:defined > a { color: var(--rs-sign-ink, #1b120a); text-decoration: none; font: var(--rs-sign-text); }
 rs-navbar:defined > a:hover { text-decoration: underline; }
-rs-navbar:defined > a[aria-current="page"] { color: var(--rs-navbar-current, #7a1405); text-decoration: underline; text-decoration-thickness: 2px; }
+rs-navbar:defined > a[aria-current="page"] { color: var(--rs-navbar-current, #5c1003); text-decoration: underline; text-decoration-thickness: 2px; }

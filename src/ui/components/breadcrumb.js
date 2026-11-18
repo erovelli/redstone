@@ -49,7 +49,7 @@ Redstone.ui.define('rs-breadcrumb', {
   },
   mounted,
   styles: `
-    :host { display: block; --rs-block: 32px; overflow-x: auto; overflow-y: hidden; }
+    :host { display: block; overflow-x: auto; overflow-y: hidden; }
     .rs-crumb { position: absolute; z-index: 3; display: flex; align-items: center; justify-content: center; line-height: normal; }
     ::slotted(*) { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     ::slotted(a:focus-visible) { outline: 2px dashed var(--rs-focus, currentColor); outline-offset: 3px; }`,

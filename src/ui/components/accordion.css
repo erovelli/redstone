@@ -2,3 +2,5 @@
    Upgraded, each summary is on the header signs, so the body shows through the opening without it. */
 rs-accordion { display: block; }
 rs-accordion:defined > details > summary { display: none; }
+/* Narrower than its machine (sign text never shrinks, SPEC I3), it scrolls sideways like rs-navbar. */
+rs-accordion:defined { overflow-x: auto; overflow-y: hidden; }

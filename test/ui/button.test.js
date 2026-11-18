@@ -41,8 +41,8 @@ module.exports = {
       return clicks === 1;
     }),
     T('active is read-only', () => !spec.state.active.set),
-    T('SPEC I3: the default block is 32 px, so sign text (0.4 of a block) is 12.8 px; signs come from the measured caption', () =>
-      /--rs-block:\s*32px/.test(spec.styles) && spec.label === 'signs' && controller(spec, {}, { text: 'Save changes' }).params.signs > controller(spec, {}, { text: 'OK' }).params.signs),
+    T('SPEC I3: the core\'s sign block (36 px) keeps sign text at 15 px or more; signs come from the measured caption', () =>
+      require('../../src/ui/core.js').SIGN_BLOCK * require('../../src/ui/core.js').SIGN_TEXT >= 15 && !/--rs-block/.test(spec.styles || '') && spec.label === 'signs' && controller(spec, {}, { text: 'Save changes' }).params.signs > controller(spec, {}, { text: 'OK' }).params.signs),
     T('in a form: submit by default, reset for type="reset", nothing for type="button"', () => {
       const rise = { key: 'active', value: true };
       const a = fakeEl(null, false), b = fakeEl('reset', false), c = fakeEl('button', false);

@@ -3,13 +3,6 @@
 //
 //   <rs-chip>redstone</rs-chip>  <rs-chip dismissible tone="lime">draft</rs-chip>  <rs-badge>3</rs-badge>
 (function () {
-const STYLES = `
-  /* 32 px blocks keep the sign text at 12.8 px (SPEC I3). The element has no text baseline of its own, so its
-     bottom edge sits on the line's baseline; lowering it by the sign's height above the bottom (1.16 blocks)
-     less a third of an em puts the sign text on the surrounding text's line. */
-  :host { --rs-block: 32px; vertical-align: calc(var(--rs-block) * -1.16 + .35em); }
-`;
-
 function spec(tone, removable) {
   return {
     entry: 'ui-chip',
@@ -22,6 +15,9 @@ function spec(tone, removable) {
     // The text sits on the signs; it stays readable to screen readers (the chip is text, not a control).
     label: 'signs',
     readLabel: true,
+    // Inline, like a <span>: the core ends the box at the bottom of the wall the signs hang on and puts the sign
+    // text's baseline on the line's baseline.
+    inline: true,
     controls: removable ? [
       { io: 'button', act: 'press', role: 'button', label: el => `Dismiss ${el.label}` },
     ] : [],
@@ -36,7 +32,6 @@ function spec(tone, removable) {
         eventDoc: 'Cancelable. Unless cancelled, the element then removes itself.',
       },
     },
-    styles: STYLES,
     changed(el, change) {
       if (change.key !== 'dismissed' || !change.value) return;
       const ev = change.dispatched[0];

@@ -3,3 +3,5 @@ rs-tabs { display: block; }
 rs-tab { display: block; }
 rs-tabs:not(:defined) > [label]::before { content: attr(label); display: block; font-weight: 600; margin-top: .6em; }
 rs-tabs:not(:defined) > [data-label]:not([label])::before { content: attr(data-label); display: block; font-weight: 600; margin-top: .6em; }
+/* Narrower than its machine (sign text never shrinks, SPEC I3), it scrolls sideways like rs-navbar. */
+rs-tabs:defined { overflow-x: auto; overflow-y: hidden; }

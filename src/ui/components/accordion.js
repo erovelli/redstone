@@ -155,11 +155,11 @@ Redstone.ui.define('rs-accordion', {
   mounted,
   observe: ['close-label'],
   styles: `
-    :host { display: block; --rs-block: 32px; }
+    :host { display: block; }
     .window { padding: .4em .7em; box-sizing: border-box; background: var(--rs-window-bg, #fbf7ea); color: var(--rs-window-ink, #1b120a); }
     .rs-acc-label { position: absolute; z-index: 2; display: flex; align-items: center; justify-content: center; overflow: hidden;
       white-space: nowrap; pointer-events: none; color: var(--rs-sign-ink, #1b120a);
-      font: 500 calc(var(--b) * .4)/1 var(--rs-sign-font, ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace); }`,
+      font: var(--rs-sign-text); }`,
   docs: {
     attributes: {
       '(children)': 'Two to five <details> elements; each <summary> goes on its header signs. Each details keeps open and fires its native toggle when its body shows or hides.',

@@ -1,10 +1,10 @@
 /* rs-input: before the element upgrades, show its label and reserve the sign row's height
-   (2 blocks tall, 2 rows deep: 2 x 1 + 2 x 0.72 blocks at 32 px). */
+   (2 blocks tall, 2 rows deep: 2 x 1 + 2 x 0.72 blocks at 36 px). */
 rs-input:not(:defined) {
   display: inline-flex;
   align-items: center;
   vertical-align: middle;
   box-sizing: border-box;
-  min-height: calc(var(--rs-block, 32px) * 3.44);
+  min-height: calc(var(--rs-block, 36px) * 3.44);
   padding: 0 .4em;
 }
