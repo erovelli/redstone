@@ -600,6 +600,30 @@ async function main() {
     await page.close();
   }
 
+  console.log('\nrs-pagination');
+  {
+    const { page, errors } = await open(browser);
+    const pg = 'rs-pagination';
+    await page.evaluate(() => document.querySelector('rs-pagination').addEventListener('change', ev => window.__events.push({ type: 'page-change', value: ev.detail.value })));
+    await page.locator(pg).scrollIntoViewIfNeeded();
+    check('pagination: a named navigation landmark on page 3 of 7, page 3 marked current', await page.$eval(pg, el => {
+      const b = [...el.shadowRoot.querySelectorAll('.hit')].filter(h => !h.hidden);
+      return el.page === 3 && el._internals.role === 'navigation' && b.length === 9 && b[4].getAttribute('aria-current') === 'page' && b[1].getAttribute('aria-label') === 'Next page';
+    }));
+    const same = await page.$eval(pg, el => { el.shadowRoot.querySelectorAll('.hit')[1].click(); return el.page; });
+    check('pagination: a click does not change page directly', same === 3);
+    check('pagination: page follows the comparator', await until(page, s => document.querySelector(s).page === 4, pg));
+    await page.locator(pg + ' >> .hit').nth(1).focus();
+    await page.keyboard.press('Home');
+    check('pagination: Home turns to the first page', await until(page, s => document.querySelector(s).page === 1, pg));
+    await page.locator(pg + ' >> .hit').nth(8).click();
+    check('pagination: a page control turns straight to its page', await until(page, s => document.querySelector(s).page === 7, pg));
+    const ev = (await events(page)).filter(e => e.type === 'page-change');
+    check('pagination: one change per page shown', ev.map(e => e.value).join() === '4,1,7', ev);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });
