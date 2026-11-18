@@ -127,6 +127,7 @@ const entry = Catalogue.register({
     'Resolution: a comparator shows 16 levels (0 to 15). A range of up to 16 values (min, max and step) gets one lamp per step above min; a wider range, or step="any", gets 15 lamps and snaps to 16 evenly spaced values, so its resolution is (max - min) / 15 rounded to the step.',
     'A book and quill does not stack: k of them in a 27-slot barrel read floor(14 k / 27) + 1. Levels 1 to 15 take 1, 2, 4, 6, ... 26 and 27 items, so every level is one or two items from the next.',
     'The hand moves one item, waits until the world is still, and reads the comparator again; it stops when the comparator shows the level the player is aiming for. The value commits from the comparator, never from the pointer.',
+    'The player waits (audited): moving to a level is a series of separate player actions, one item each, each applied to a quiet world; the element runs the world to quiet between them (settle) instead of in real time, so a drag or an arrow key shows the end state at once. No action is refused or dropped, and the comparator decides when to stop.',
     'Build with { min, max, step, value } (the element\'s attributes; the workbench uses { levels }, 0 to levels in steps of 1).',
   ],
   params: [{ key: 'levels', label: 'Levels (0 to n, step 1)', min: 1, max: 15, def: 15 }],

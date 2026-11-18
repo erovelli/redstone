@@ -12,12 +12,19 @@ const reduced = () => window.matchMedia && matchMedia('(prefers-reduced-motion: 
 function onClick(el, i, ev) {
   if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
   ev.preventDefault();
-  const built = el._ctl && el._ctl.built;
-  // One launch at a time: a chamber that has not refilled would pour water over its open drop shaft.
+  const c = el.contraption, built = c && c.built;
+  // One launch at a time (declared in the entry's deviations): a chamber that has not refilled would pour water
+  // over its open drop shaft, so the element ignores presses until every launcher is home with a pearl.
   if (!built || el._flight || !built.links.every(built.ready)) return;
   const L = built.links[i], a = links(el)[i];
   el._flight = { a, pearl: built.pearlOf(L) };
-  el._activate({ act: hand => hand.press(L.button) }, null, ev);
+  el.perform(hand => hand.press(L.button), { event: ev });
+}
+
+// A chamber that is set again and empty gets a fresh pearl: the player throws one in (world.hand.throwPearl).
+function restock(el, state) {
+  if (!state.empty) return;
+  el.perform((hand, io, built) => built.links.forEach(L => built.restock(L)));
 }
 
 function navigate(el) {
@@ -28,10 +35,11 @@ function navigate(el) {
   if (!ev.defaultPrevented) location.href = a.href;
 }
 
-// The view is wrapped so that, after every frame, flying pearls are drawn on a fixed full-viewport canvas,
-// a landed pearl triggers navigation, and an empty, refilled chamber gets a fresh pearl (a player's throw).
+// The view is wrapped so that, after every frame, flying pearls are drawn on a fixed full-viewport canvas and a
+// pearl that has left the viewport (or hit something) triggers navigation.
 function mounted(el, view, built) {
-  const box = el._box;
+  const box = el.shadowRoot.querySelector('.box');
+  const stage = el.shadowRoot.querySelector('.stage');
   box.querySelectorAll('.rs-links').forEach(n => n.remove());
   const wrap = document.createElement('div');
   wrap.className = 'rs-links';
@@ -52,7 +60,7 @@ function mounted(el, view, built) {
   const sky = document.createElement('canvas');
   sky.className = 'rs-sky';
   sky.setAttribute('aria-hidden', 'true');
-  el._stage.appendChild(sky);
+  stage.appendChild(sky);
   const pearlTex = Redstone.textures.get('item/ender_pearl');
   view.entityFilter = en => !!en.stasis;           // held pearls on the wall; moving ones on the sky
   const draw = view.draw;
@@ -67,7 +75,7 @@ function mounted(el, view, built) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, W, H);
-    const st = el._stage.getBoundingClientRect(), p = Math.max(0, Math.min(1, (now - view.tickAt) / 100));
+    const st = stage.getBoundingClientRect(), p = Math.max(0, Math.min(1, (now - view.tickAt) / 100));
     const size = view.B * 0.5;
     for (const en of view.world.entities) {
       if (en.gone || en.stasis) continue;
@@ -77,7 +85,6 @@ function mounted(el, view, built) {
       if (el._flight && el._flight.pearl === en && (x < -size || y < -size || x > W + size || y > H + size)) navigate(el);
     }
     if (el._flight && el._flight.pearl && el._flight.pearl.gone) navigate(el);
-    for (const L of built.links) if (built.restock(L)) el._awake = true;
   };
 }
 
@@ -95,8 +102,13 @@ Redstone.ui.define('rs-navbar', {
       attr: 'launching',
       doc: 'True from a press until every chamber holds a pearl again (about 3 s). Presses are ignored meanwhile.',
     },
+    empty: {
+      read: (io, built) => built.links.some(L => built.chamberSet(L) && !built.pearlOf(L)),
+      doc: 'True while a chamber is set and holds no pearl; the element then throws one in.',
+    },
   },
   mounted,
+  sync: restock,
   methods: { click() { const a = links(this)[0]; if (a) a.click(); } },
   styles: `
     :host { display: block; overflow-x: auto; overflow-y: hidden; }

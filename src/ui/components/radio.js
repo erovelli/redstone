@@ -13,13 +13,11 @@ const valueOf = o => (o.hasAttribute('value') ? o.getAttribute('value') : o.text
 const valuesOf = el => options(el).map(valueOf);
 const valuesIn = built => (built && built.values) || [];
 
-// One press per tick: two buttons pressed in the same tick would set both latches (a player's clicks reach the
-// world one per game tick). A refused press returns false; page code's set is retried after settling.
+// Press option k's button. Every press reaches the world, as in the game: two buttons pressed in the same tick set
+// both latches (value reads "" until the next press settles it). A press on a button that is still in does
+// nothing and returns false; page code's set is retried after settling.
 function pressOption(hand, io, built, k) {
-  if (!io.buttons[k] || built.pressedAt === built.world.t) return false;
-  if (!hand.press(io.buttons[k])) return false;
-  built.pressedAt = built.world.t;
-  return true;
+  return !!io.buttons[k] && hand.press(io.buttons[k]);
 }
 
 // Each option row is 3 depth rows (3T); the lower half is mirrored, which leaves 2 more rows before it.

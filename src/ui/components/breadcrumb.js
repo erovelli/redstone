@@ -1,6 +1,6 @@
-// <rs-breadcrumb>: where you are. Each crumb's link sits on oak signs under a trail of dust and repeaters; as the
-// page loads the element flips the lever at the root and the signal walks out one crumb at a time, stopping at the
-// current page (the last child, marked aria-current="page").
+// <rs-breadcrumb>: where you are. Each crumb's link sits on oak signs under a trail of dust and repeaters. The
+// machine is built with the lever at the root on, so the signal has walked out to the current page (the last
+// child, marked aria-current="page") and stops there. The element performs no player action of its own.
 //
 //   <rs-breadcrumb><a href="/">Home</a><a href="/docs">Docs</a><span>Tabs</span></rs-breadcrumb>
 //
@@ -27,8 +27,6 @@ function mounted(el, view, built) {
     c.slot = `rs-crumb-${k}`;
     if (k === list.length - 1) c.setAttribute('aria-current', 'page');
   });
-  // The page's one player action: flip the lever at the root, so the signal walks out to the current page.
-  if (!built.io.lever.on) queueMicrotask(() => el.perform((hand, io) => !io.lever.on && hand.flip(io.lever)));
 }
 
 Redstone.ui.define('rs-breadcrumb', {
@@ -37,6 +35,7 @@ Redstone.ui.define('rs-breadcrumb', {
   params: {
     crumbs: (el, ctx) => Math.max(1, crumbs(ctx.el).length),
     signs: (el, ctx) => texts(ctx.el).map(t => ctx.signsFor(t, { min: 1, max: 5 })),
+    on: () => true,                                // static: built with the lever on, the trail walked out
   },
   controls: [],
   host: { role: 'navigation', aria: { label: (s, el) => el.getAttribute('aria-label') || 'Breadcrumb' } },

@@ -106,6 +106,7 @@ const entry = Catalogue.register({
     'The comparator strongly powers A; the torch on A is the dust line\'s only source, at 15, so at most 14 columns.',
     'Columns alternate honey and slime: each piston moves only its own column, at most 12 blocks.',
     'Build with { open: true } for a menu that starts open: the bulb lit, the torch out, the columns back.',
+    'A stone button stays in for 10 ticks, so for the first second after opening a choice (which presses the same button) does nothing: the machine cannot take the press. The element passes it on and counts the choice only if the press went in.',
   ],
   params: [
     { key: 'cols', label: 'Columns', min: 1, max: MAX_COLS, def: 6 },

@@ -186,7 +186,6 @@ function buildSelector(o) {
     box: [-2, xMax, 0, sh.Y, sh.zb - 1, 1],
     opening: sh.opening,
     io: Object.assign(bank.io, { pistons: sh.pistons, covers: sh.covers, comparator: sh.comparator }),
-    pressedAt: -1,
     shown: closed ? -1 : o.sel,
   };
 }
@@ -224,14 +223,12 @@ function shownPanel(built) {
   return built.shown;
 }
 
-// One press per tick: two buttons pressed in the same tick would set both latches (a player's clicks reach the
-// world one per game tick). A refused press returns false; the core retries a page request after settling.
+// Press band k's button. Every press reaches the world: two buttons pressed in the same tick set both latches, and
+// the panel on show stays the last one until the next press settles the bank. A press on a button that is still
+// in does nothing and returns false; the core retries a page request after settling.
 function pressBand(hand, io, built, k) {
   const b = io.buttons[k];
-  if (!b || built.pressedAt === built.world.t) return false;
-  if (!hand.press(b)) return false;
-  built.pressedAt = built.world.t;
-  return true;
+  return !!b && hand.press(b);
 }
 
 /* ---------- tests ---------- */
@@ -276,7 +273,7 @@ const entry = Catalogue.register({
     'Exclusivity is the latches (see rs-radio): while any button is in, every memory repeater copies its own delay line.',
     'The shutter pulse is made under the bank floor: a wall torch on the floor block under the collector, halfway down the bank, goes out on a press; its dust line feeds a comparator in subtract mode, at the side directly (through a repeater, so it reaches 15) and at the rear through a 4-tick repeater. The comparator strongly powers the block under the west end of the piston row\'s dust.',
     'Pressing the chosen tab again blinks the shutter and changes nothing else.',
-    'Two presses in the same tick would set both latches; the element sends one press per tick, as the game does.',
+    'Two presses in the same tick set both latches; the panel on show stays the last one until a later press settles the bank (a later press always wins). The element passes every press on, as a player could make them.',
     'Columns alternate honey and slime and every block a column touches is glazed terracotta, air or its own piston, so each piston moves exactly its column: rows blocks, at most 12.',
     'Build with { sel: k } for tab k chosen; { values } are the values the element passes for its value property; { signs: [..] } one sign count per tab.',
   ],

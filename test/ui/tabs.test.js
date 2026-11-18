@@ -38,9 +38,15 @@ module.exports = {
       ctl.settle();
       return one && ctl.state.selected === 0 && ctl.state.shown0;
     }),
-    T('two presses in the same tick: the second is refused (one interaction per tick)', () => {
+    T('two presses in the same tick both reach the machine; the panel on show stays put until a later press settles the bank', () => {
       const ctl = make();
-      return ctl.act(spec.controls[1]) === true && ctl.act(spec.controls[0]) === false;
+      const shown = ctl.state.selected;
+      const a = ctl.act(spec.controls[1]), b = ctl.act(spec.controls[0]);
+      ctl.settle();
+      const held = ctl.state.selected === shown;
+      ctl.act(spec.controls[1]);
+      ctl.settle();
+      return a === true && b === true && held && ctl.state.selected === 1;
     }),
     T('controls are tabs over the button row and the label signs, aria-selected follows selected, roving focus', () => {
       const c = spec.controls[1];

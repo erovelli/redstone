@@ -3,7 +3,8 @@
 //
 // A lever at the root; then per crumb a repeater (delay 2) and dust over the rest of the crumb's signs; a lamp at
 // the end, after the current page. Flip the lever on and the signal walks out one repeater per crumb and stops at
-// the lamp: the trail ends where you are. The element flips the lever when it loads (the page's one player action).
+// the lamp: the trail ends where you are. The element builds it with the lever on: the steady state with the
+// signal walked out (no player action at load).
 //
 //   plan (z = 0 on a planks floor; the signs hang on the floor's front face at y = 1, z = -1):
 //     y=0   lever  R> dust dust  R> dust  R> dust dust dust  lamp
@@ -64,17 +65,17 @@ const entry = Catalogue.register({
   id: 'ui-breadcrumb',
   name: 'Breadcrumb',
   category: 'Navigation',
-  summary: 'A trail of dust and repeaters from a lever at the root to a lamp after the current page, one repeater per crumb, with each crumb\'s name on signs below its stretch of trail. Flipped on as the page loads, the signal walks out one crumb at a time and stops at the current page.',
+  summary: 'A trail of dust and repeaters from a lever at the root to a lamp after the current page, one repeater per crumb, with each crumb\'s name on signs below its stretch of trail. The lever is on: the signal has walked out one crumb at a time and stops at the current page.',
   strict: true,
   deviations: [],
-  inputs: ['lever (flipped once as the page loads)'],
+  inputs: ['lever (built on by the element; the workbench can flip it)'],
   outputs: ['the signal reaching each crumb', 'the lamp at the current page'],
   actions: ['flip the lever'],
   timing: 'Crumb k\'s repeater turns on 2(k + 1) + 1 ticks after the lever (the lever powers the first on the next tick); the lamp at the end lights in the same tick as the last repeater.',
   notes: [
     'Each crumb is at most 5 signs, so the dust after a repeater is at most 4 blocks: the signal arrives at 11 or more.',
     'The links are ordinary links laid over the signs; the trail only shows the way.',
-    'Build with { on: true } for a trail that has walked out.',
+    'Build with { on: true } for a trail that has walked out: the element always does, so it performs no player action (an earlier version flipped the lever as the page loaded, which is code acting without a player).',
   ],
   params: [
     { key: 'crumbs', label: 'Crumbs', min: 1, max: MAX, def: 3 },

@@ -53,9 +53,10 @@ function colsFor(el, ctx) {
   return Math.max(1, Math.min(14, fit, Math.max(ctx.signsFor(labelText(el), { min: 1, max: 14 }) - 1, Math.ceil((w + 2) / ctx.B))));
 }
 
-// What the player does with the menu button: press it, unless it is already in (a press would do nothing).
-const press = (hand, io) => { if (!io.button.on) hand.press(io.button); };
-const pressIf = lit => (hand, io) => { if (!!io.bulb.lit === lit) press(hand, io); };
+// What the player does with the menu button: press it. While it is still in from the last press (10 ticks) the
+// press does nothing: hand.press returns false, as in the game.
+const press = (hand, io) => hand.press(io.button);
+const pressIf = lit => (hand, io) => !!io.bulb.lit === lit && press(hand, io);
 
 function shut(el) { el.perform(pressIf(true)); }
 
@@ -86,11 +87,13 @@ function onKey(el, ev) {
   }
 }
 
+// Choosing an item presses the menu button; the choice counts only if the press went in (right after opening the
+// button is still in, and the machine does nothing).
 function choose(el, item) {
-  const io = el.contraption && el.contraption.io;
-  if (!io || !el.open || io.button.on || !enabled(item)) return;   // the button is still in: the press would do nothing
-  mine(el).chosen = item;
-  el.perform(pressIf(true));
+  if (!el.contraption || !el.open || !enabled(item)) return;
+  el.perform((hand, io) => {
+    if (pressIf(true)(hand, io)) mine(el).chosen = item;
+  });
 }
 
 // Follow the door: clear -> focus the first item; shut -> fire select for a chosen item, focus back to the button.
