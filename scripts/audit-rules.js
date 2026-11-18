@@ -42,6 +42,7 @@ const PATTERNS = [
 const REVIEWED = [
   { file: 'src/ui/components/accordion.js', id: 'state-write', text: 'd.open = open', why: 'a <details> element in the light DOM mirrors the machine; not a block' },
   { file: 'src/ui/components/toast.js', id: 'state-write', text: 'this.open = ', why: 'the element\'s own `open` property: its setter presses the show or dismiss button' },
+  { file: 'src/ui/components/toast.js', id: 'state-write', text: 'el.open = true', why: 'the element\'s own `open` property (<rs-toast open>): its setter presses the show button' },
   { file: 'src/ui/components/theme.js', id: 'state-write', text: 'built.world.sky = ', why: 'ui-theme-auto: the sky light is the environment, declared as a deviation (strict: false)' },
 ];
 
