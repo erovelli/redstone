@@ -5,7 +5,7 @@ const spec = loadComponent('popover');
 const T = (name, fn) => ({ name, fn });
 const close = spec.controls[0];
 // What a trigger click does: the button the latch calls for.
-const trigger = { act: (hand, io) => hand.press(io.tA.lit ? io.show : io.close) };
+const trigger = { act: (hand, io) => hand.press(io.latch.on && !io.show.on ? io.show : io.close) };
 
 function run(ctl, n) {
   const out = [];
@@ -16,13 +16,13 @@ function run(ctl, n) {
 module.exports = {
   suite: 'rs-popover',
   tests: [
-    T('the trigger presses open: toggle fires on tick 3; pressed again it presses close and the door shuts on tick 1', () => {
+    T('the trigger presses open: toggle fires on tick 5; pressed again it presses close and the door shuts on tick 1', () => {
       const ctl = controller(spec, {});
       ctl.act(trigger);
       const a = run(ctl, 12).find(c => c.key === 'open');
       ctl.act(trigger);
       const b = run(ctl, 12).find(c => c.key === 'open');
-      return a.tick === 3 && a.value === true && b.tick === 1 && b.value === false && !ctl.state.deployed;
+      return a.tick === 5 && a.value === true && b.tick === 1 && b.value === false && !ctl.state.deployed;
     }),
     T('the trigger during the opening presses close (the latch is already set): it ends closed', () => {
       const ctl = controller(spec, {});
