@@ -662,6 +662,97 @@ async function main() {
     await page.close();
   }
 
+  console.log('\ndisplay: divider, list, card, counter');
+  {
+    const { page, errors } = await open(browser);
+    await page.locator('#rs-divider').scrollIntoViewIfNeeded();
+    check('divider: role separator, as wide as its container, plain one is quiet', await page.$eval('rs-divider:not([pulse])', el => {
+      const box = el.shadowRoot.querySelector('.box').getBoundingClientRect().width, w = el.getBoundingClientRect().width;
+      return el._internals.role === 'separator' && w - box < el.contraption.view.B && box > 0 && el.contraption.world.quiet;
+    }));
+    check('divider: pulse runs its clock', await until(page, () => document.querySelector('rs-divider[pulse]').contraption.io.repeaters.some(r => r.on)));
+    await page.locator('#rs-list').scrollIntoViewIfNeeded();
+    check('list: one lit torch per item, beside its first line', await page.$eval('#rs-list rs-list:not([ordered])', el => {
+      const items = [...el.querySelectorAll('li')], c = el.contraption, B = c.view.B;
+      const top = el.shadowRoot.querySelector('.box').getBoundingClientRect().top;
+      return c.built.bullets.length === items.length && c.built.bullets.every(([t], k) => {
+        const r = c.view.rectOf(t, 'front'), li = items[k].getBoundingClientRect();
+        const mid = top + r.y + r.h / 2, line = parseFloat(getComputedStyle(items[k]).lineHeight);
+        return t.lit && mid > li.top - 2 && mid < li.top + line + 2;
+      });
+    }));
+    check('list: the column reflows when the items rewrap', await page.$eval('#rs-list rs-list:not([ordered])', async el => {
+      const h0 = el.contraption.built.height;
+      el.style.width = '200px';
+      await new Promise(r => setTimeout(r, 400));
+      const h1 = el.contraption.built.height;
+      el.style.width = '';
+      return h1 > h0;
+    }));
+    await events(page);
+    await page.locator('#rs-list rs-list a').first().click();
+    check('list: a click on a link in an item reaches the page', (await events(page)).some(e => e.type === 'click' && e.tag === 'a'));
+    check('card: the content shows through a clear opening; the on attribute lights the corner lamp', await page.$eval('rs-card[heading="Vault"]', el => {
+      const shown = !el.shadowRoot.querySelector('.window').hidden;
+      el.setAttribute('on', '');
+      return shown && el.on === true && el.contraption.io.lamp.lit && el.contraption.view.B >= 30;
+    }));
+    check('counter: setting value moves items and the readout follows the comparators', await page.$eval('#online', el => {
+      el.value = 63;
+      const rows = el.contraption.built.rows.map(r => r.lamps.filter(l => l.lit).length).join();
+      return el.value === 63 && rows === '6,3' && el.shadowRoot.querySelector('.readout').textContent === '63';
+    }));
+    const idle = await page.evaluate(async () => {
+      const host = document.createElement('div');
+      host.innerHTML = '<rs-divider></rs-divider><rs-list><li>a</li><li>b</li></rs-list>'.repeat(20);
+      document.querySelector('#rs-list .live').appendChild(host);
+      await new Promise(r => setTimeout(r, 600));
+      const els = [...host.children];
+      const canvases = els.map(e => e.shadowRoot.querySelector('canvas'));
+      await new Promise(r => setTimeout(r, 600));
+      const still = els.every((e, i) => e.contraption.world.quiet && e.shadowRoot.querySelector('canvas') === canvases[i]);
+      host.remove();
+      return still;
+    });
+    check('twenty dividers and twenty lists are quiet and never rebuilt while idle', idle);
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
+  console.log('\nrs-drawer');
+  {
+    const { page, errors } = await open(browser);
+    const d = '#site-drawer';
+    const trigger = page.locator('[data-rs-open="site-drawer"]');
+    const h0 = await page.$eval(d, e => e.contraption.world.hash());
+    await trigger.scrollIntoViewIfNeeded();
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    check('the trigger puts the overlay up; open waits for the machine', await until(page, s => { const e = document.querySelector(s); return e.deployed && !e.open; }, d, 1000));
+    check('open when the machine parks; focus moves into the panel', await until(page, s => { const e = document.querySelector(s); return e.open && e.contains(document.activeElement); }, d, 6000));
+    check('the page behind is inert', await page.evaluate(() => document.querySelector('main, .page, body > div') ? [...document.body.children].some(n => n.inert) : true));
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    check('Tab stays inside the drawer', await page.$eval(d, e => e.contains(document.activeElement) || document.activeElement === e));
+    await page.keyboard.press('Escape');
+    check('Escape flies it home: close fires, focus returns to the trigger', await until(page, s => {
+      const e = document.querySelector(s);
+      return !e.deployed && !e.open && document.activeElement && document.activeElement.getAttribute('data-rs-open') === 'site-drawer';
+    }, d, 6000));
+    check('a full cycle returns the world to its start', await until(page, ([s, h]) => { const w = document.querySelector(s).contraption.world; return w.quiet && w.hash() === h; }, [d, h0], 3000));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+  {
+    const { page, errors } = await open(browser, { reducedMotion: 'reduce' });
+    check('drawer, reduced motion: show() parks it at once', await page.$eval('#site-drawer', e => { e.show(); return e.open && e.contraption.state.lead === e.contraption.built.cols - 1; }));
+    check('drawer, reduced motion: a backdrop click closes it at once', await page.$eval('#site-drawer', e => { e.click(); return !e.open && !e.deployed; }));
+    check('no console errors', errors.length === 0, errors);
+    await page.close();
+  }
+
   console.log('\nnarrow and dark');
   {
     const { page, errors } = await open(browser, { viewport: { width: 320, height: 700 }, colorScheme: 'dark' });

@@ -1,0 +1,5 @@
+/* rs-drawer: before the element upgrades it is hidden, like a closed <dialog>; with the open attribute it shows its
+   content as a plain panel at the west edge. */
+rs-drawer:not(:defined) { display: none; }
+rs-drawer:not(:defined)[open] { display: block; position: fixed; left: 0; top: 0; bottom: 0; z-index: 2147481000;
+  max-width: calc(100vw - 32px); padding: 1em; border-right: 2px solid currentColor; background: Canvas; color: CanvasText; }
