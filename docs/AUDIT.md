@@ -71,3 +71,17 @@ Rule checks that found nothing anywhere: no element or contraption writes block 
 - Water appears only in the navbar's stasis chambers, each contained by glass (front), a jukebox (west), the dispenser (east), the observer (back) and soul sand (below); the cell above is air, which water does not flow into.
 - Flying machines (the drawer) and the honey and slime doors need no support. The drawer relies on Java block dropping (a sticky piston given a 1-tick observer pulse leaves its block behind), which is vanilla behaviour.
 - Risk, navbar only: see its row above. The exported pearl is summoned without an owner, so in the game it does not teleport anyone when it lands.
+
+## Legacy catalogue
+
+The workbench catalogue had 19 legacy entries built on the fake `wall`, `wallb` and `ground` blocks and on `world.floor` wiring links, driven in their tests by writing `.on` and scheduling with `world.at`.
+
+| Entry | Action |
+|---|---|
+| lever-lamp, inverter, or-gate, and-gate, xor-gate, rs-latch, t-flip-flop, sequencer, observer-pulse, edge-detector, torch-clock, delay-line, comparator-reader, comparator-subtractor, sculk-latch | Converted: strict worlds on a stone floor, settled while built and sealed; tests and the generic lever cycle use `world.hand` (`flip`, `press`, `vibrate`). All strict, timings unchanged. |
+| piston-door-2x2 | Converted: stone bricks for the wall and stone for the floor (no slime, so each sticky piston still pulls only its own brick). Strict. |
+| flying-machine | Removed: superseded by rs-drawer (a strict two-way flying machine). It needed wiring links. |
+| split-door | Removed: superseded by rs-modal and rs-collapse (strict honey and slime doors). It needed wiring links and the non-strict `stretch` rule. |
+| hidden-2x2 | Removed: superseded by rs-collapse (the hidden-plaque door made strict). It needed wiring links and `wallb` walls. |
+
+No entry is non-strict because of legacy wiring now, so the engine no longer has `wall`, `wallb`, `ground`, the `fake` flag or `world.floor`; `src/contraptions/door.js`, `hidden.js` and `scenes.js` are deleted. Every catalogue entry gets a generic test that it builds a sealed strict world that does not drift. The workbench (`pages/catalogue-app.js`) now drives its controls through `world.hand` instead of writing `.on` and calling `world.at`, which a sealed world refuses.

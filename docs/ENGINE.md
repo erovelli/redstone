@@ -34,7 +34,7 @@ w.comparatorOutput(comparator) / w.waterContained(water) / w.supported(attachedB
 RS.defineBlock(type, def) / RS.blocks[type]
 ```
 
-Legacy members still work: `w.floor` (wiring links), `w.at(t, fn)`, `w.spawn(kind, x, y, z, o)`, `w.vibrate(x, y, z)`, `w.shift(list, dir)`, `w.structure(...)`, `w.extend(p)`, `w.retract(p)`, `w.into(tgt, n)`, `w.poweredAt(b)`, `w.lampPowered(b)`, `w.bubbleColumn(...)`, `w.solidAt(...)`, `w.sig(...)`, `w.vibs`, `w.sensors`, and direct field pokes such as `lever.on = true` in non-strict worlds. `RS.addLatch` and `RS.addSequencer` are unchanged.
+Legacy members still work in non-strict worlds: `w.at(t, fn)`, `w.spawn(kind, x, y, z, o)`, `w.vibrate(x, y, z)`, `w.shift(list, dir)`, `w.structure(...)`, `w.extend(p)`, `w.retract(p)`, `w.into(tgt, n)`, `w.poweredAt(b)`, `w.lampPowered(b)`, `w.bubbleColumn(...)`, `w.solidAt(...)`, `w.sig(...)`, `w.vibs`, `w.sensors`, and direct field pokes such as `lever.on = true` in non-strict worlds. `RS.addLatch` and `RS.addSequencer` are unchanged.
 
 ### Events
 
@@ -49,7 +49,7 @@ Listeners receive `{ event, t, name, x, y, z, ... }`. They are observers: while 
 
 ### Strict worlds and `world.hand` (R1 to R6)
 
-`new RS.World({ strict: true })`. `put` rejects unknown types. `seal()` throws, listing every problem, if the world has: a fake block (`wall`, `wallb`, `ground`), a wiring link in `world.floor`, a block flagged `buried`, a water source that is not contained, an attached block with nothing to attach to, or an extended piston without its head. After `seal()`, `put`, `set`, `shift`, `at`, `spawn`, `vibrate` and `floor.push` throw unless the engine itself or `world.hand` is calling. A sealed world that is quiet skips all work in `tick()` (the clock still advances).
+`new RS.World({ strict: true })`. `put` rejects unknown types. `seal()` throws, listing every problem, if the world has: a block flagged `buried`, a water source that is not contained, an attached block with nothing to attach to, or an extended piston without its head. After `seal()`, `put`, `set`, `shift`, `at`, `spawn`, `vibrate` throw unless the engine itself or `world.hand` is calling. A sealed world that is quiet skips all work in `tick()` (the clock still advances).
 
 The engine cannot stop code assigning fields on plain block objects (`lamp.lit = true`). R2 is enforced by tests: `assertSteady()` and `hash()`.
 
@@ -75,14 +75,14 @@ The engine cannot stop code assigning fields on plain block objects (`lamp.lit =
 
 ### Rules (`world.rules`)
 
-Rule fixes apply to every world, except these switches, which default to the legacy behaviour in non-strict worlds because a legacy catalogue contraption depends on it. Strict worlds always get `true`. Pass `{ rules: { ... } }` to override.
+Rule fixes apply to every world, except these switches, which default to the legacy behaviour in non-strict worlds. No catalogue entry uses a non-strict world any more (every one is built strict), so the switches only matter for hand-made test worlds. Strict worlds always get `true`. Pass `{ rules: { ... } }` to override.
 
-| rule | strict | legacy | what it switches | legacy contraption that needs it off |
-|---|---|---|---|---|
-| `qc` | on | off | quasi-connectivity for pistons, droppers and dispensers | shared pearl launcher (a station block next to the cell above a piston) |
-| `stretch` | on | off | repeaters lock, and keep one pending update so short pulses stretch to the delay (off: every input change is replayed after the delay, no locking) | split door (a 1-tick observer pulse runs down a 12-tick repeater line) |
-| `trapdoorPush` | on | off | trapdoors are movable (off: immovable) | shared pearl launcher (a slime rail would drag the crate trapdoor) |
-| `projectileHit` | on | off | projectiles hit blocks: they disappear, light targets and fire `hit` (off: they collide and rest like items) | all three pearl launchers (the pearl lands on slime and is launched again) |
+| rule | strict | legacy | what it switches |
+|---|---|---|---|
+| `qc` | on | off | quasi-connectivity for pistons, droppers and dispensers |
+| `stretch` | on | off | repeaters lock, and keep one pending update so short pulses stretch to the delay (off: every input change is replayed after the delay, no locking) |
+| `trapdoorPush` | on | off | trapdoors are movable (off: immovable) |
+| `projectileHit` | on | off | projectiles hit blocks: they disappear, light targets and fire `hit` (off: they collide and rest like items) |
 
 ### Block registry
 
@@ -93,7 +93,6 @@ RS.defineBlock('type', {
   solid,       // entity collision
   push,        // 'normal' | 'immovable' | 'destroy' | 'push_only'
   sticky,      // 'slime' | 'honey'
-  fake,        // legacy invented block: strict worlds reject it
   emits(world, b, toward) -> 0..15    // weak signal to the neighbour in direction `toward`
   strong(world, b, toward) -> 0..15   // strong (direct) signal; powers a conductive neighbour  [extension]
   tick(world, b, now)                 // runs every tick in the component pass
@@ -144,7 +143,6 @@ A block built without `powered` takes its current power at `seal()` (or before t
 | `daylight` | daylight_detector | immovable | no | `level`, `inverted` |
 | `sculk` | sculk_sensor | immovable | no | `on`, `out`, `state` |
 | `water` | water (source) | destroy (displaced) | no | |
-| `wall`, `wallb`, `ground` | none (legacy) | immovable | yes | `fake: true` |
 
 Container contents: `items` is one entry per slot, `{ id, n }` or `null`, with vanilla item ids without the namespace (`stone`, `bucket`, `water_bucket`, `ender_pearl`, `snowball`, ...). `fill` is always the comparator reading; a container built with only `fill` gets stone stacks that produce it the first time items move.
 
@@ -195,7 +193,7 @@ Each tick: run due scheduled events; compute power from the current state; run t
 
 ### Export
 
-`toCommands({ origin: [X, Y, Z], clear = true })` returns `fill ... air` (unless `clear: false`), then `setblock X Y Z <state>[nbt] replace` lines (supports first, bottom up; attached blocks last), `summon` lines for frames and entities, and `#` comment lines for warnings. Engine (x, y, z) maps to Minecraft (X + x, Y + z, Z + y); without an origin the coordinates are relative (`~`). Repeaters and comparators get Minecraft `facing` = the direction of their input; wall torches, wall signs, levers and buttons face away from their support. Containers carry `Items` (1.21 `count` format), comparators `OutputSignal`, signs `front_text`, lecterns a writable book, jukeboxes `RecordItem`, chiseled bookshelves their books. Fake blocks export as look-alikes (`deepslate_bricks`, `stone_bricks`, `smooth_stone`) with a warning; wiring links are not exported.
+`toCommands({ origin: [X, Y, Z], clear = true })` returns `fill ... air` (unless `clear: false`), then `setblock X Y Z <state>[nbt] replace` lines (supports first, bottom up; attached blocks last), `summon` lines for frames and entities, and `#` comment lines for warnings. Engine (x, y, z) maps to Minecraft (X + x, Y + z, Z + y); without an origin the coordinates are relative (`~`). Repeaters and comparators get Minecraft `facing` = the direction of their input; wall torches, wall signs, levers and buttons face away from their support. Containers carry `Items` (1.21 `count` format), comparators `OutputSignal`, signs `front_text`, lecterns a writable book, jukeboxes `RecordItem`, chiseled bookshelves their books.
 
 `node scripts/export-commands.js <entry-id> [--origin X,Y,Z] [--param k=v] [--no-clear]` prints an `.mcfunction` for a catalogue entry.
 

@@ -16,7 +16,7 @@ const tests = [
     b.spawn('pearl', 3.5, 0.5, 2, {}); b.spawn('pearl', 1.5, 0.5, 2, {});
     return a.hash() === b.hash();
   }),
-  T('the registry holds the SPEC 5.2 palette with Minecraft ids; legacy blocks are fake', () => {
+  T('the registry holds the SPEC 5.2 palette with Minecraft ids; the legacy invented blocks are gone', () => {
     const palette = ['stone', 'bricks', 'planks', 'smooth_stone', 'iron', 'quartz', 'wool', 'concrete', 'glass', 'terracotta', 'obsidian', 'slime', 'honey',
       'rblock', 'lamp', 'bulb', 'target', 'noteblock', 'jukebox', 'barrel', 'furnace', 'chest', 'dispenser', 'dropper', 'hopper', 'lectern', 'bookshelf',
       'bell', 'sign', 'piston', 'head', 'observer', 'dust', 'torch', 'repeater', 'comparator', 'lever', 'button', 'plate', 'door', 'trapdoor', 'gate',
@@ -24,10 +24,10 @@ const tests = [
     for (const t of palette) {
       const d = RS.blocks[t];
       if (!d) throw new Error(`${t} missing`);
-      if (d.fake) throw new Error(`${t} is fake`);
       if (!d.mc) throw new Error(`${t} has no mc id`);
     }
-    ok(['wall', 'wallb', 'ground'].every(t => RS.blocks[t].fake && RS.blocks[t].push === 'immovable'), 'legacy blocks are fake and immovable');
+    ok(['wall', 'wallb', 'ground'].every(t => !RS.blocks[t]), 'no wall, wallb or ground');
+    throws(() => world().put(0, 0, 0, 'wallb'), /unknown block/, 'a strict world refuses the old fake block');
     eq(['obsidian', 'glass', 'terracotta', 'dust', 'barrel', 'slime', 'noteblock', 'bell', 'trapdoor'].map(t => RS.blocks[t].push), ['immovable', 'normal', 'push_only', 'destroy', 'immovable', 'normal', 'normal', 'destroy', 'normal'], 'push classes');
     eq(['smooth_stone', 'glass', 'slime', 'honey', 'bulb', 'noteblock', 'hopper'].map(t => RS.blocks[t].conductive), [true, false, true, false, false, true, false], 'conductive');
     return eq([RS.blocks.slime.sticky, RS.blocks.honey.sticky], ['slime', 'honey'], 'sticky');
@@ -43,11 +43,8 @@ const tests = [
     return throws(() => RS.defineBlock('bad', { push: 'sideways' }), /push must be/);
   }),
 
-  T('seal() rejects fake blocks, wiring links, hidden blocks, unsupported attachments and unknown types', () => {
-    const fake = world(); fake.put(0, 0, 0, 'wallb');
-    throws(() => fake.seal(), /not a vanilla block/, 'fake');
-    const link = world(); link.floor.push({ feed: [0, 0, 0], cells: [[1, 0, 0]] });
-    throws(() => link.seal(), /wiring link/, 'floor link');
+  T('seal() rejects hidden blocks, unsupported attachments and unknown types; there are no wiring links', () => {
+    ok(world().floor === undefined, 'no world.floor');
     const buried = world(); buried.put(0, 0, 0, 'stone', { buried: true });
     throws(() => buried.seal(), /buried/, 'buried');
     const floating = world(); floating.put(0, 0, 3, 'torch', { att: 'D' });
@@ -57,7 +54,7 @@ const tests = [
     return throws(() => world().put(0, 0, 0, 'unobtainium'), /unknown block/, 'unknown type');
   }),
 
-  T('after seal, put/set/shift/at/spawn/vibrate and floor links throw; world.hand works', () => {
+  T('after seal, put/set/shift/at/spawn/vibrate throw; world.hand works', () => {
     const { w, lever, lamp } = leverLamp();
     w.seal();
     throws(() => w.put(5, 0, 0, 'stone'), /sealed/, 'put');
@@ -66,7 +63,6 @@ const tests = [
     throws(() => w.at(w.t + 1, () => {}), /sealed/, 'at');
     throws(() => w.spawn('item', 0, 0, 0), /sealed/, 'spawn');
     throws(() => w.vibrate(0, 0, 0), /sealed/, 'vibrate');
-    throws(() => w.floor.push({}), null, 'floor');
     w.hand.flip(lever);
     w.tick();
     return ok(lamp.lit, 'the lever lit the lamp');
@@ -162,16 +158,14 @@ const tests = [
     return eq(new RS.World({ rules: { qc: true } }).rules.qc, true, 'override');
   }),
 
-  T('legacy worlds: wiring links, direct pokes and fake blocks still work', () => {
+  T('non-strict worlds still allow direct pokes (tests and the texture sheet use them)', () => {
     const w = new RS.World();
-    w.put(0, 0, -1, 'ground');
-    const lever = w.put(0, 0, 0, 'lever', { att: 'D' });   // strongly powers the ground block it is on
-    const lamp = w.put(5, 5, 0, 'lamp');
-    w.put(5, 5, -1, 'wallb');
-    w.floor.push({ feed: [0, 0, -1], cells: [[5, 5, -1]] });
+    w.put(0, 0, -1, 'stone');
+    const lever = w.put(0, 0, 0, 'lever', { att: 'D' });
+    const lamp = w.put(1, 0, -1, 'lamp');
     lever.on = true;
     w.run(2);
-    return ok(lamp.lit, 'linked');
+    return ok(lamp.lit, 'the lever lit the lamp beside its block');
   }),
 
   T('toCommands maps engine x, y, z to Minecraft x, z, y', () => {

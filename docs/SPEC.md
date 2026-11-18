@@ -141,7 +141,6 @@ RS.defineBlock(type, {
   solid,         // bool: entity collision
   push,          // 'normal' | 'immovable' | 'destroy' | 'push_only'
   sticky,        // 'slime' | 'honey' | undefined
-  fake,          // true only for legacy wall/wallb/ground; strict worlds reject them
   emits(world, b, toward) -> 0..15,      // optional: power source behaviour
   tick(world, b, now),                   // optional: per-tick behaviour
   analog(world, b) -> 0..15,             // optional: comparator reading
@@ -151,7 +150,7 @@ RS.blocks                                 // type -> definition
 
 const w = new RS.World({ strict: true });
 w.put(...)                                // build phase
-w.seal();                                 // strict: from here put/set/shift/floor throw unless the engine or w.hand calls them
+w.seal();                                 // strict: from here put/set/shift throw unless the engine or w.hand calls them
 w.hand.flip(lever) / .press(button) / .step(plate, on) / .vibrate(x,y,z) / .fill(container, n) / .page(lectern, n)
       / .rotate(frame) / .delay(repeater, n) / .mode(comparator, m) / .tune(noteblock, n) / .write(sign, text)
       / .throwPearl(x,y,z, vx,vy,vz) / .use(...)          // R5: the complete list of legal mutations
@@ -197,7 +196,6 @@ State fields are the contract between engine and renderer. `d` is a facing (`N E
 | `sculk` | sculk_sensor | immovable | no | as today |
 | `soulsand`, `magma` | soul_sand, magma_block | normal | yes | |
 | `water` | water | displaced | no | |
-| `wall`, `wallb`, `ground` | none (legacy) | immovable | yes | `fake: true` |
 
 A component that needs a block outside this table adds `src/blocks/<type>.js` with `RS.defineBlock` and, guarded by `typeof window`, its model and textures.
 

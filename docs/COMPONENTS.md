@@ -51,7 +51,7 @@ Catalogue.register({
 Rules for builders:
 
 - Coordinates: x east, y toward the viewer, z up. The camera sees front faces (y+) and top faces (z+). Keep the machine shallow: every row of depth adds 0.72 of a block of height.
-- Strict: `new RS.World({ strict: true })` and `w.seal()` at the end. Real blocks only (SPEC 5.2); no `ground`, `wall`, `wallb`, no `world.floor`, no `buried`. Write the steady state the engine itself settles into, including derived state such as dust levels (`lvl`) and lamps (`lit`), so `testing.noDrift` passes from the first tick.
+- Strict: `new RS.World({ strict: true })` and `w.seal()` at the end. Real blocks only (SPEC 5.2; the engine has no invented blocks or wiring links any more); no `buried`. Write the steady state the engine itself settles into, including derived state such as dust levels (`lvl`) and lamps (`lit`), so `testing.noDrift` passes from the first tick.
 - Use `category` from SPEC section 6 (`Navigation`, `Disclosure and overlays`, `Form controls`, `Feedback`, `Display`). The docs sidebar groups by it.
 - `io` holds block objects (or arrays of them). Name the label signs `signs` by convention, and any opening a list of cells in the built object (`opening: [[x, y, z], ...]`).
 - Boolean params are attribute presence, so they must default to `false`. A param that only the element sets (such as a start state) need not be in `params`; document it in `notes`.
@@ -202,7 +202,7 @@ t.settle(world)               // run until quiet; throws if it never settles
 t.hash(world)                 // state signature for "returns to start"
 t.ticksUntil(world, () => cond, max)   // ticks until cond (first tick = 1), or -1
 t.noDrift(world, 100)         // the built state does not change for 100 ticks
-t.strictWorld(world, RS)      // real blocks, no feed/buried flags, no world.floor (throws with the reason)
+t.strictWorld(world, RS)      // registered blocks only, no feed/buried flags (throws with the reason)
 t.pistonCount(world)
 t.edges(entry)                // every combination of min, default, max and options
 ```
