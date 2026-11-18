@@ -1459,18 +1459,6 @@ T('rs/outline', (ctx, px) => {
   px.border('rgba(255,255,255,0.9)');
 });
 
-// Wiring link dots (legacy power links, shown in inspect mode).
-T('rs/link_dot', (ctx, px) => {
-  px.rect(5, 5, 6, 6, 'rgba(0,0,0,0.5)');
-  px.rect(6, 6, 4, 4, '#ffffff');
-});
-
-// The red core of a legacy station block while its link is powered.
-T('rs/link_core', (ctx, px) => {
-  px.rect(4, 4, 8, 8, '#ff3420');
-  px.rect(6, 6, 4, 4, '#ffb199');
-});
-
 // The sculk bench's visitor: a small figure seen from the front.
 T('rs/visitor', (ctx, px) => {
   px.map([

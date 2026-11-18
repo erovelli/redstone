@@ -234,8 +234,6 @@ const plain = (tex, opt = {}) => ({ kind: 'cube', faces: () => ({ front: tex, to
 
 defineModel('stone', plain('block/stone'));
 defineModel('bricks', plain('block/stone_bricks'));
-defineModel('wallb', plain('block/stone_bricks'));
-defineModel('wall', plain('block/deepslate_bricks'));
 defineModel('planks', plain('block/oak_planks'));
 defineModel('smooth_stone', plain('block/smooth_stone'));
 defineModel('iron', plain('block/iron_block'));
@@ -260,30 +258,7 @@ defineModel('terracotta', {
   },
 });
 
-// Ground: the legacy floor, coloured from the page palette (--floor, --floor-line).
-TX.define('rs/ground_top', (ctx, px) => {
-  px.fill(pal.floor || '#cfc8b8');
-  px.rect(0, 0, 16, 1, pal.line || '#bdb6a6');
-  px.rect(0, 0, 1, 16, pal.line || '#bdb6a6');
-});
-TX.define('rs/ground_side', (ctx, px) => {
-  const f = pal.floor || '#cfc8b8';
-  px.fill(TX.mix(f, '#000000', 0.38));
-  px.rect(0, 0, 16, 2, TX.mix(f, '#000000', 0.18));
-  px.rect(4, 6, 2, 1, TX.mix(f, '#000000', 0.5));
-  px.rect(10, 10, 2, 1, TX.mix(f, '#000000', 0.5));
-});
-defineModel('ground', { kind: 'cube', inspect: 'ghost', faces: () => ({ front: { tex: 'rs/ground_side', shade: false }, top: 'rs/ground_top' }) });
-
-// Obsidian. A legacy station or feed block shows a red core while its wiring link powers it.
-defineModel('obsidian', {
-  kind: 'cube',
-  inspect: 'ghost',
-  faces: (b, env) => {
-    const lit = (b.station || b.feed) && env.strong(b) > 0;
-    return { front: lit ? ['block/obsidian', { tex: 'rs/link_core', shade: false }] : 'block/obsidian', top: 'block/obsidian' };
-  },
-});
+defineModel('obsidian', plain('block/obsidian'));
 
 defineModel('glass', {
   kind: 'boxes',
@@ -1265,7 +1240,6 @@ function drawView(v, now) {
   }
 
   if (inspect) {
-    drawLinks(env);
     if (v.B >= 14) for (const d of digitList) drawDigits(env, d.b, d.n, d.off);
   }
 
@@ -1290,31 +1264,6 @@ function drawOutline(env, b, state) {
   if (state !== 'legacy') {
     const t = v.pt(b.x + env.off[0], b.y + env.off[1], b.z + 1 + env.off[2]);
     blit(v, img, 0, 0, img.width, img.height, t.x, t.y, v.B, v.T);
-  }
-  v.ctx.globalAlpha = 1;
-}
-
-// Inspect mode: legacy wiring links (a feed block powering distant cells) drawn as dotted lines of redstone.
-function drawLinks(env) {
-  const v = env.view;
-  const w = env.world;
-  for (const L of w.floor || []) {
-    const fed = (w.strong && w.strong.get(RS.K(...L.feed))) > 0;
-    const tint = fed ? '#ff3a1c' : '#8a3a30';
-    const a = v.pt(L.feed[0] + 0.5, L.feed[1] + 1, L.feed[2] + 0.5);
-    for (const c of L.cells) {
-      const q = v.pt(c[0] + 0.5, c[1] + 1, c[2] + 0.5);
-      const len = Math.hypot(q.x - a.x, q.y - a.y);
-      const n = Math.max(2, Math.round(len / Math.max(6, v.B / 2)));
-      const s = Math.max(3, Math.round(v.B / 6));
-      const img = variant('rs/link_dot', 0, 0, tint, 1, 0);
-      v.ctx.globalAlpha = fed ? 0.95 : 0.45;
-      for (let i = 0; i <= n; i++) {
-        const x = a.x + ((q.x - a.x) * i) / n;
-        const y = a.y + ((q.y - a.y) * i) / n;
-        blit(v, img, 0, 0, img.width, img.height, x - s / 2, y - s / 2, s, s);
-      }
-    }
   }
   v.ctx.globalAlpha = 1;
 }
@@ -1462,7 +1411,6 @@ function tag(stage, l, t, text) {
 // Page palette for the legacy ground block.
 function readPal() {
   pal = { floor: cssVar('--floor'), line: cssVar('--floor-line'), cavity: cssVar('--cavity') };
-  TX.refresh('rs/ground_*');
 }
 
 // Default block size for views that do not choose one (the workbench sets this from the page width).
