@@ -94,7 +94,7 @@ Fluids and entities
 - **I2. One scale, one camera.** A block is `--rs-block` CSS pixels square (default 24) for everything on that component. The camera is the fixed oblique view (front face plus top face).
 - **I3. Text is never painted over blocks.** It sits in one of three places.
   - *Beside the machine*, as ordinary page text. This is the default for inline form controls (toggle, checkbox, radio, slider): the contraption is the control and its label stands next to it, like a native label (`label: 'beside'`).
-  - *On a text block* (a sign, a hanging sign, a lectern book) when the text is part of the machine: a nav destination, a button's caption, a chip, a tab, a tooltip. Sign text must be readable: at least 12 CSS px. A wall sign's board is half a block tall, so a component with sign text defaults to `--rs-block: 32px` or more, and a label spans as many adjacent signs as its measured width needs. If the text cannot be legible at the current block size, make the machine bigger or move the text beside it; never shrink the text.
+  - *On a text block* (a sign, a hanging sign, a lectern book) when the text is part of the machine: a nav destination, a button's caption, a chip, a tab, a tooltip. Sign text must be readable: at least 15 CSS px, weight 600 or more, centred on the board, never clipped, and at least 4.5:1 against the board's average colour (boards use the pale `rs/oak_sign` texture). A wall sign's board is half a block tall and the text is 0.42 of a block, so the core gives every component with sign text 36 px blocks by default and as its minimum (a narrow container scrolls; a smaller `--rs-block` is raised), and a label spans as many adjacent signs as its width, measured in the real sign font, needs. If the text cannot be legible at the current block size, make the machine bigger or move the text beside it; never shrink the text.
   - *Through an opening* the contraption really makes (a door, pulled covers, glass): accordion bodies, dialogs, panels. This is ordinary HTML behind the machine.
 - **I4. Motion is the engine's motion.** Sprites interpolate between engine states (a piston stroke is one tick). No CSS transitions pretending to be machinery.
 - **I5. Sound is block sound.** Piston, click, note block, bell, bucket: synthesised (no game assets), only after a user gesture, off under `prefers-reduced-motion`, and controlled by `Redstone.config.sound` (default `false` in the library; the docs site turns it on).
@@ -226,7 +226,7 @@ Requirements for every component:
 - **Progressive enhancement.** Before the script runs, and if it never runs, the light DOM is usable HTML (links are links, content is readable). No flash of unstyled content beyond a reserved box.
 - **Standard surface.** Properties and events mirror the native element it replaces (`checked` + `change`, `open` + `toggle`, `value` + `input`). Events fire when the contraption's output changes. `disabled` works.
 - **Accessible.** Real focusable controls with names, correct roles and states, full keyboard operation, visible focus. The canvas is `aria-hidden`. State is announced when the output changes.
-- **Self-contained.** No page CSS required. Sizing via `--rs-block`. Works at 12 to 48 px per block and inside a 320 px wide viewport.
+- **Self-contained.** No page CSS required. Sizing via `--rs-block`. Works at 12 to 48 px per block (36 to 48 with sign text, I3) and inside a 320 px wide viewport.
 - **Cheap when idle.** A quiet world is not ticked or redrawn.
 - `element.contraption` exposes `{ world, io, entry }` for the curious.
 

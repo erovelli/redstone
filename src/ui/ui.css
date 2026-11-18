@@ -4,9 +4,10 @@
    appended to this file by the build.
 
    Custom properties (set them on any ancestor or on the element):
-     --rs-block        block size in CSS px, 12 to 48 (default 24)
+     --rs-block        block size in CSS px, 12 to 48 (default 24); with sign text 36 to 48 (default 36)
      --rs-focus        focus ring color (default: the text color)
-     --rs-sign-font    font for text on signs (default: the system monospace)
+     --rs-sign-font    font for text on signs (default: the system monospace, bold)
+     --rs-sign-weight  weight of text on signs (default 700; keep it 600 or more)
      --rs-sign-ink     sign text color (default: near black, like the game)
      --rs-window-bg    background behind content shown through an opening (default: Canvas)
 */
