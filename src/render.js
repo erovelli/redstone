@@ -535,21 +535,30 @@ defineModel('comparator', {
   digits: b => b.out || 0,
 });
 
-// Torch: standing on the floor, or leaning out from a wall (att is the block it hangs on).
+// Torch: standing on the floor, or leaning out from a wall (att is the block it hangs on). Vanilla's stick is 2/16 of
+// a block wide; below 24 px blocks that is under 3 px and reads as a scratch, so the stick and head thicken to stay
+// about 3 px wide (up to 5/16 at 12 px). Only the drawing changes: the block and its rules are the same.
+function torchHalfWidth(env) {
+  const B = env && env.view ? env.view.B : 24;
+  return clamp(24 / B, 1, 2.5);
+}
 defineModel('torch', {
   kind: 'attached',
   inspect: 'show',
-  boxes: b => {
+  boxes: (b, env) => {
     const lit = !!b.lit;
     const att = b.att || 'D';
-    if (att === 'D' || att === 'U') return [torchBox(7, 7, 0, 10, lit)];
-    // Five 2px segments, each a little further from the wall: a 22.5 degree lean.
     const tex = lit ? 'block/redstone_torch' : 'block/redstone_torch_off';
+    const th = torchHalfWidth(env);
+    if (att === 'D' || att === 'U') {
+      return [{ from: [8 - th, 8 - th, 0], to: [8 + th, 8 + th, 10], south: { tex, uv: [7, 6, 9, 16], shade: !lit }, up: { tex, uv: [7, 6, 9, 8], shade: false } }];
+    }
+    // Five segments, each a little further from the wall: a 22.5 degree lean.
     const list = [];
     for (let k = 0; k < 5; k++) {
       const out = 0.5 + k * 0.85;
       const z0 = 3 + k * 2;
-      const [from, to] = attBox(att, [7, z0, out], [9, z0 + 2, out + 2]);
+      const [from, to] = attBox(att, [8 - th, z0, out], [8 + th, z0 + 2, out + 2 * th]);
       const v0 = 16 - 2 * (k + 1);
       list.push({ from, to, south: { tex, uv: [7, v0, 9, v0 + 2], shade: !lit }, up: k === 4 ? { tex, uv: [7, 6, 9, 8], shade: false } : null });
     }
